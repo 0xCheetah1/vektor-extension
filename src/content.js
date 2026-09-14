@@ -9,6 +9,7 @@ const state = {
   closeHandlers: null,
 };
 
+const ASK_THRESHOLD = 50;
 const LAUNCH_THRESHOLD = 70;
 
 function init() {
@@ -83,8 +84,8 @@ function injectButtons() {
     button.className = "vektor-launch-button";
     button.type = "button";
     const analytics = analyzeLaunchFit(tweet, tweetText);
-    if (analytics.launchFitScore < LAUNCH_THRESHOLD) return;
-    button.textContent = "Launch meme";
+    if (analytics.launchFitScore < ASK_THRESHOLD) return;
+    button.textContent = analytics.launchFitScore >= LAUNCH_THRESHOLD ? "Launch meme" : "Ask VEKTOR";
     button.title = "Generate a memecoin plan from this post";
     button.addEventListener("click", (event) => {
       event.preventDefault();
