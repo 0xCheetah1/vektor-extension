@@ -155,6 +155,40 @@
   overflow-wrap: anywhere;
 }
 
+.vektor-token-info {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  color: rgb(209, 213, 219);
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 10px;
+  padding: 12px;
+}
+
+.vektor-token-info-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.vektor-token-info-grid span {
+  color: rgb(156, 163, 175);
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.vektor-token-info-grid strong {
+  color: rgb(229, 231, 235);
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
 .vektor-buy-dial {
   display: grid;
   gap: 8px;
@@ -172,6 +206,13 @@
   font-size: 12px;
   font-weight: 900;
   padding: 11px;
+}
+
+.vektor-buy-option:disabled,
+.vektor-custom-buy button:disabled,
+.vektor-custom-buy input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .vektor-custom-buy {

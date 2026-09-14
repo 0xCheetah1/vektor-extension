@@ -203,7 +203,7 @@ async function openBuyPanel(contractAddress, source) {
   const amounts = normalizeQuickBuyAmounts(settings.quickBuyAmounts);
   const panel = document.createElement("section");
   panel.className = "vektor-panel";
-  panel.append(createBuyHeader(source), createContractBlock(contractAddress), createBuySpeedDial(amounts), createBuyOutput(settings));
+  panel.append(createBuyHeader(source), createContractBlock(contractAddress), createTokenInfoBlock(), createBuySpeedDial(amounts), createBuyOutput(settings));
 
   document.body.appendChild(panel);
   state.openPanel = panel;
@@ -218,6 +218,7 @@ async function openBuyPanel(contractAddress, source) {
     prepareBuy(panel, contractAddress, amount);
   });
   setupPanelDismiss(panel);
+  loadTokenInfo(panel, contractAddress);
 }
 
 function setupPanelDismiss(panel) {
@@ -268,6 +269,10 @@ async function generatePlan(panel, payload) {
 
 function prepareBuy(panel, contractAddress, amount) {
   const output = panel.querySelector(".vektor-output");
+  if (panel.dataset.tokenValid !== "true") {
+    output.textContent = "Token validation is required before buy prep. If this is a wallet address or non-ERC-20 contract, VEKTOR will not prepare a buy.";
+    return;
+  }
   if (!Number(amount) || Number(amount) <= 0) {
     output.textContent = "Enter a valid ETH amount.";
     return;
@@ -284,6 +289,40 @@ function prepareBuy(panel, contractAddress, amount) {
     null,
     2,
   );
+}
+
+function loadTokenInfo(panel, contractAddress) {
+  const block = panel.querySelector(".vektor-token-info");
+  block.textContent = "Validating contract on Robinhood Chain...";
+
+  chrome.runtime.sendMessage({ type: "GET_TOKEN_INFO", contractAddress }, (response) => {
+    if (!state.openPanel || state.openPanel !== panel) return;
+    if (!response?.ok) {
+      panel.dataset.tokenValid = "false";
+      setBuyDisabled(panel, true);
+      block.textContent = response?.error || "Token validation failed.";
+      return;
+    }
+
+    let token = response.result;
+    if (typeof token === "string") {
+      try {
+        token = JSON.parse(token);
+      } catch (_error) {
+        token = {};
+      }
+    }
+
+    panel.dataset.tokenValid = "true";
+    setBuyDisabled(panel, false);
+    block.replaceChildren(createTokenInfoRows(token));
+  });
+}
+
+function setBuyDisabled(panel, disabled) {
+  panel.querySelectorAll(".vektor-buy-option, .vektor-custom-buy button, .vektor-custom-amount").forEach((control) => {
+    control.disabled = disabled;
+  });
 }
 
 function normalizeQuickBuyAmounts(amounts) {
@@ -457,6 +496,42 @@ function createContractBlock(contractAddress) {
   return block;
 }
 
+function createTokenInfoBlock() {
+  const block = document.createElement("div");
+  block.className = "vektor-token-info";
+  block.textContent = "Waiting for token validation...";
+  return block;
+}
+
+function createTokenInfoRows(token) {
+  const wrap = document.createElement("div");
+  wrap.className = "vektor-token-info-grid";
+  [
+    ["Name", token.name || "Unknown token"],
+    ["Symbol", token.symbol || "UNKNOWN"],
+    ["Supply", token.totalSupply || "Unknown"],
+    ["Price", token.priceUsd ? `$${formatDisplayNumber(token.priceUsd)}` : "Not indexed"],
+    ["Liquidity", token.liquidityUsd ? `$${formatDisplayNumber(token.liquidityUsd)}` : "Not indexed"],
+    ["Market cap", token.marketCap ? `$${formatDisplayNumber(token.marketCap)}` : token.marketCapNote || "Not indexed"],
+    ["Source", token.marketCapSource || "none"],
+  ].forEach(([label, value]) => {
+    const row = document.createElement("div");
+    const key = document.createElement("span");
+    const val = document.createElement("strong");
+    key.textContent = label;
+    val.textContent = value;
+    row.append(key, val);
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+
+function formatDisplayNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value);
+  return number.toLocaleString(undefined, { maximumFractionDigits: number >= 1 ? 2 : 8 });
+}
+
 function createBuySpeedDial(amounts) {
   const wrap = document.createElement("div");
   wrap.className = "vektor-buy-dial";
@@ -465,6 +540,7 @@ function createBuySpeedDial(amounts) {
     button.className = "vektor-buy-option";
     button.type = "button";
     button.dataset.amount = amount;
+    button.disabled = true;
     button.textContent = `${amount} ETH`;
     wrap.appendChild(button);
   });
@@ -475,8 +551,10 @@ function createBuySpeedDial(amounts) {
   input.className = "vektor-custom-amount";
   input.inputMode = "decimal";
   input.placeholder = "Custom ETH";
+  input.disabled = true;
   const submit = document.createElement("button");
   submit.type = "submit";
+  submit.disabled = true;
   submit.textContent = "Buy custom";
   form.append(input, submit);
   wrap.appendChild(form);

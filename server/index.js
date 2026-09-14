@@ -10,6 +10,7 @@ const PROVIDER = process.env.AGENT_PROVIDER || "deepseek";
 const DEEPSEEK_ENDPOINT = process.env.DEEPSEEK_ENDPOINT || "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 const ORBIO_ENDPOINT = process.env.ORBIO_ENDPOINT || "";
+const ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
 const LAUNCH_SYSTEM_PROMPT = loadPromptFile(path.join(__dirname, "prompts", "launch-system.txt"));
 
 const server = http.createServer(async (request, response) => {
@@ -26,13 +27,19 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
-  if (request.method !== "POST" || request.url !== "/api/generate-token-plan") {
+  if (request.method !== "POST" || !["/api/generate-token-plan", "/api/token-info"].includes(request.url)) {
     sendJson(response, 404, { ok: false, error: "Not found" });
     return;
   }
 
   try {
     const payload = await readJson(request);
+    if (request.url === "/api/token-info") {
+      const result = await getTokenInfo(payload?.contractAddress || "");
+      sendJson(response, 200, { ok: true, result });
+      return;
+    }
+
     const tweetText = payload?.tweetText?.trim();
     if (!tweetText) throw new HttpError(400, "No tweet text captured.");
 
@@ -111,6 +118,159 @@ Tweet text: ${payload.tweetText}
 Tweet URL: ${payload.tweetUrl || "unknown"}
 Launch analytics: ${JSON.stringify(payload.analytics || {}, null, 2)}
 Wallet connected: ${payload.walletAddress ? "yes" : "no"}`;
+}
+
+async function getTokenInfo(contractAddress) {
+  if (!/^0x[a-fA-F0-9]{40}$/.test(contractAddress)) throw new HttpError(400, "Invalid EVM address format.");
+
+  const code = await rpcCall("eth_getCode", [contractAddress, "latest"]);
+  if (!code || code === "0x") throw new HttpError(400, "Address is not a contract. It looks like a wallet address, not a token CA.");
+
+  const [name, symbol, decimals, totalSupply] = await Promise.all([
+    readTokenString(contractAddress, "0x06fdde03"),
+    readTokenString(contractAddress, "0x95d89b41"),
+    readTokenUint(contractAddress, "0x313ce567"),
+    readTokenUint(contractAddress, "0x18160ddd"),
+  ]);
+  const market = await fetchMarketData(contractAddress);
+
+  if (!name && !symbol && decimals === null && totalSupply === null) {
+    throw new HttpError(400, "Contract exists, but ERC-20 metadata could not be read.");
+  }
+
+  return {
+    contractAddress,
+    chain: "Robinhood Chain",
+    chainId: 4663,
+    isContract: true,
+    name: name || "Unknown token",
+    symbol: symbol || "UNKNOWN",
+    decimals,
+    totalSupply: formatTokenAmount(totalSupply, decimals),
+    totalSupplyRaw: totalSupply,
+    priceUsd: market.priceUsd,
+    liquidityUsd: market.liquidityUsd,
+    marketCap: market.marketCap,
+    marketCapSource: market.source,
+    marketCapNote: market.note,
+  };
+}
+
+async function fetchMarketData(contractAddress) {
+  const dexScreener = await fetchDexScreenerMarket(contractAddress);
+  if (dexScreener.marketCap || dexScreener.priceUsd || dexScreener.liquidityUsd) return dexScreener;
+
+  const geckoTerminal = await fetchGeckoTerminalMarket(contractAddress);
+  if (geckoTerminal.marketCap || geckoTerminal.priceUsd || geckoTerminal.liquidityUsd) return geckoTerminal;
+
+  return {
+    priceUsd: null,
+    liquidityUsd: null,
+    marketCap: null,
+    source: "not indexed",
+    note: "No public market data found yet for this contract.",
+  };
+}
+
+async function fetchDexScreenerMarket(contractAddress) {
+  try {
+    const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddress}`);
+    if (!response.ok) return emptyMarket("DexScreener unavailable");
+    const data = await response.json();
+    const pairs = Array.isArray(data.pairs) ? data.pairs : [];
+    const best = pairs
+      .filter((pair) => pair.baseToken?.address?.toLowerCase() === contractAddress.toLowerCase())
+      .sort((a, b) => Number(b.liquidity?.usd || 0) - Number(a.liquidity?.usd || 0))[0];
+    if (!best) return emptyMarket("DexScreener has no pair for this contract.");
+    return {
+      priceUsd: best.priceUsd || null,
+      liquidityUsd: best.liquidity?.usd ? String(best.liquidity.usd) : null,
+      marketCap: best.marketCap || best.fdv || null,
+      source: "DexScreener",
+      note: best.marketCap ? "Market cap from DexScreener." : best.fdv ? "FDV from DexScreener used when market cap is unavailable." : "Price/liquidity found; market cap unavailable.",
+    };
+  } catch (_error) {
+    return emptyMarket("DexScreener lookup failed.");
+  }
+}
+
+async function fetchGeckoTerminalMarket(contractAddress) {
+  try {
+    const response = await fetch(`https://api.geckoterminal.com/api/v2/search/pools?query=${encodeURIComponent(contractAddress)}`);
+    if (!response.ok) return emptyMarket("GeckoTerminal unavailable.");
+    const data = await response.json();
+    const pools = Array.isArray(data.data) ? data.data : [];
+    const best = pools
+      .filter((pool) => JSON.stringify(pool).toLowerCase().includes(contractAddress.toLowerCase()))
+      .sort((a, b) => Number(b.attributes?.reserve_in_usd || 0) - Number(a.attributes?.reserve_in_usd || 0))[0];
+    if (!best) return emptyMarket("GeckoTerminal has no pool for this contract.");
+    return {
+      priceUsd: best.attributes?.base_token_price_usd || null,
+      liquidityUsd: best.attributes?.reserve_in_usd || null,
+      marketCap: best.attributes?.market_cap_usd || best.attributes?.fdv_usd || null,
+      source: "GeckoTerminal",
+      note: best.attributes?.market_cap_usd ? "Market cap from GeckoTerminal." : best.attributes?.fdv_usd ? "FDV from GeckoTerminal used when market cap is unavailable." : "Price/liquidity found; market cap unavailable.",
+    };
+  } catch (_error) {
+    return emptyMarket("GeckoTerminal lookup failed.");
+  }
+}
+
+function emptyMarket(note) {
+  return { priceUsd: null, liquidityUsd: null, marketCap: null, source: "none", note };
+}
+
+async function rpcCall(method, params) {
+  const response = await fetch(ROBINHOOD_RPC_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
+  });
+  const data = await response.json();
+  if (!response.ok || data.error) throw new HttpError(502, data.error?.message || `RPC ${method} failed.`);
+  return data.result;
+}
+
+async function readTokenString(contractAddress, selector) {
+  try {
+    const result = await rpcCall("eth_call", [{ to: contractAddress, data: selector }, "latest"]);
+    return decodeStringResult(result);
+  } catch (_error) {
+    return "";
+  }
+}
+
+async function readTokenUint(contractAddress, selector) {
+  try {
+    const result = await rpcCall("eth_call", [{ to: contractAddress, data: selector }, "latest"]);
+    if (!result || result === "0x") return null;
+    return BigInt(result).toString();
+  } catch (_error) {
+    return null;
+  }
+}
+
+function decodeStringResult(result) {
+  if (!result || result === "0x") return "";
+  const hex = result.slice(2);
+  try {
+    if (hex.length === 64) return Buffer.from(hex.replace(/00+$/, ""), "hex").toString("utf8").trim();
+    const offset = Number.parseInt(hex.slice(0, 64), 16) * 2;
+    const length = Number.parseInt(hex.slice(offset, offset + 64), 16) * 2;
+    return Buffer.from(hex.slice(offset + 64, offset + 64 + length), "hex").toString("utf8").trim();
+  } catch (_error) {
+    return "";
+  }
+}
+
+function formatTokenAmount(raw, decimals) {
+  if (raw === null || decimals === null) return null;
+  const value = BigInt(raw);
+  const scale = 10n ** BigInt(decimals);
+  const whole = value / scale;
+  const fraction = value % scale;
+  const fractionText = fraction.toString().padStart(decimals, "0").slice(0, 4).replace(/0+$/, "");
+  return fractionText ? `${whole}.${fractionText}` : whole.toString();
 }
 
 function readJson(request) {

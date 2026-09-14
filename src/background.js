@@ -9,6 +9,10 @@ const AGENT_PROXY_ENDPOINTS = [
   "http://thecheetah11.com/vektor-agent/api/generate-token-plan",
   "http://localhost:8787/api/generate-token-plan",
 ];
+const TOKEN_INFO_ENDPOINTS = [
+  "http://thecheetah11.com/vektor-agent/api/token-info",
+  "http://localhost:8787/api/token-info",
+];
 const ROBINHOOD_CHAIN = {
   name: "Robinhood Chain",
   chainId: "0x1237",
@@ -37,6 +41,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "GET_CHAIN_CONFIG") {
     sendResponse({ ok: true, result: ROBINHOOD_CHAIN });
   }
+
+  if (message?.type === "GET_TOKEN_INFO") {
+    getTokenInfo(message.contractAddress)
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
 });
 
 async function generateTokenPlan(payload) {
@@ -47,29 +58,43 @@ async function generateTokenPlan(payload) {
   return callAgentProxy(settings, payload);
 }
 
+async function getTokenInfo(contractAddress) {
+  return postToFirstAvailable(TOKEN_INFO_ENDPOINTS, { contractAddress }, "No token info service is reachable.", { stringifyResult: false });
+}
+
 async function callAgentProxy(settings, payload) {
+  return postToFirstAvailable(
+    AGENT_PROXY_ENDPOINTS,
+    {
+      ...payload,
+      walletAddress: settings.walletAddress || "",
+    },
+    "No VEKTOR agent proxy is reachable.",
+    { stringifyResult: true },
+  );
+}
+
+async function postToFirstAvailable(endpoints, payload, fallbackMessage, options = {}) {
   let lastError = null;
 
-  for (const endpoint of AGENT_PROXY_ENDPOINTS) {
+  for (const endpoint of endpoints) {
     try {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          ...payload,
-          walletAddress: settings.walletAddress || "",
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || `Agent proxy failed with ${response.status}`);
+      if (!response.ok) throw new Error(data?.error || `VEKTOR proxy failed with ${response.status}`);
+      if (!options.stringifyResult) return data.result;
       return typeof data.result === "string" ? data.result : JSON.stringify(data.result, null, 2);
     } catch (error) {
       lastError = error;
     }
   }
 
-  throw new Error(lastError?.message || "No VEKTOR agent proxy is reachable.");
+  throw new Error(lastError?.message || fallbackMessage);
 }
