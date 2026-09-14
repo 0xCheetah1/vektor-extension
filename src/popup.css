@@ -152,6 +152,11 @@ button.secondary {
   margin-top: 10px;
 }
 
+button.dashboard-button {
+  background: linear-gradient(135deg, #34d399, #a7f3d0);
+  margin-top: 0;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.5;

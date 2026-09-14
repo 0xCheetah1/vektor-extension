@@ -1,4 +1,5 @@
 const STORAGE_FIELDS = ["walletAddress", "walletChainId", "walletConnectedAt"];
+const ROBINHOOD_CHAIN_ID = "0x1237";
 
 async function load() {
   const settings = await chrome.storage.local.get(STORAGE_FIELDS);
@@ -12,7 +13,7 @@ async function connectWallet() {
 
   try {
     const chain = await getChainConfig();
-    const response = await sendActiveTabMessage({ type: "CONNECT_WALLET", chain });
+    const response = await sendWalletMessage({ type: "CONNECT_WALLET", chain });
     if (!response?.ok) throw new Error(response?.error || "Wallet connection failed.");
 
     const payload = {
@@ -22,12 +23,12 @@ async function connectWallet() {
     };
     await chrome.storage.local.set(payload);
     renderStatus(payload);
-    flash("Wallet connected.");
+    flash("Wallet connected on Robinhood Chain.");
   } catch (error) {
     flash(error.message);
   } finally {
     button.disabled = false;
-    button.textContent = "Connect browser wallet";
+    button.textContent = "Connect wallet";
   }
 }
 
@@ -38,31 +39,18 @@ async function disconnectWallet() {
   flash("Wallet disconnected.");
 }
 
-function openDashboard() {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const targetTabId = tabs?.[0]?.id || "";
-    const url = chrome.runtime.getURL(`src/dashboard.html?targetTabId=${encodeURIComponent(targetTabId)}`);
-    chrome.tabs.create({ url });
-  });
-}
+function sendWalletMessage(message) {
+  const targetTabId = Number(new URLSearchParams(location.search).get("targetTabId"));
+  if (!targetTabId) return Promise.reject(new Error("Open this dashboard from VEKTOR while an X/Twitter tab is active."));
 
-function sendActiveTabMessage(message) {
   return new Promise((resolve, reject) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tabId = tabs?.[0]?.id;
-      if (!tabId) {
-        reject(new Error("Open X/Twitter and try again."));
+    chrome.tabs.sendMessage(targetTabId, message, (response) => {
+      const lastError = chrome.runtime.lastError;
+      if (lastError) {
+        reject(new Error("Reload X/Twitter, then reopen this dashboard from the VEKTOR popup."));
         return;
       }
-
-      chrome.tabs.sendMessage(tabId, message, (response) => {
-        const lastError = chrome.runtime.lastError;
-        if (lastError) {
-          reject(new Error("Open or reload X/Twitter so VEKTOR can access the page wallet."));
-          return;
-        }
-        resolve(response);
-      });
+      resolve(response);
     });
   });
 }
@@ -84,14 +72,24 @@ function getChainConfig() {
   });
 }
 
+function openX() {
+  chrome.tabs.create({ url: "https://x.com" });
+}
+
 function renderStatus(settings) {
   const wallet = settings.walletAddress || "";
   const chainId = settings.walletChainId?.toLowerCase() || "";
+  const ready = wallet && chainId === ROBINHOOD_CHAIN_ID;
+  const chainChip = document.getElementById("chainChip");
+
   document.getElementById("walletStatus").textContent = wallet ? shortAddress(wallet) : "Not connected";
-  document.getElementById("walletChip").textContent = wallet && chainId === "0x1237" ? "Robinhood Chain" : "Required before launch";
   document.getElementById("walletAddress").textContent = wallet || "No wallet connected.";
+  document.getElementById("walletChain").textContent = chainId ? `${chainId}${ready ? " Robinhood Chain" : ""}` : "Unknown";
+  document.getElementById("walletConnectedAt").textContent = settings.walletConnectedAt ? new Date(settings.walletConnectedAt).toLocaleString() : "Never";
   document.getElementById("disconnectWallet").disabled = !wallet;
-  document.getElementById("agentStatus").textContent = "Internal";
+
+  chainChip.textContent = ready ? "Robinhood Chain ready" : "Robinhood Chain required";
+  chainChip.classList.toggle("ready", Boolean(ready));
 }
 
 function shortAddress(address) {
@@ -104,10 +102,10 @@ function flash(message) {
   status.textContent = message;
   setTimeout(() => {
     status.textContent = "";
-  }, 2200);
+  }, 3200);
 }
 
 document.getElementById("connectWallet").addEventListener("click", connectWallet);
 document.getElementById("disconnectWallet").addEventListener("click", disconnectWallet);
-document.getElementById("openDashboard").addEventListener("click", openDashboard);
+document.getElementById("openX").addEventListener("click", openX);
 load();

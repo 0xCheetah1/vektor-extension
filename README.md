@@ -78,10 +78,13 @@ npm run build:zip
 
 Open the extension popup to:
 
+- Open the full-page VEKTOR dashboard.
 - Connect or disconnect an injected browser wallet from the active X/Twitter tab.
 - Switch the browser wallet to Robinhood Chain mainnet when connecting.
 - Confirm wallet status before preparing a launch.
 - Confirm that agent routing is internal.
+
+The full dashboard is available from the popup or Firefox extension options. For wallet connection, open it from the VEKTOR popup while an X/Twitter tab is active so the dashboard can route the request through the page wallet bridge.
 
 ## Current Limits
 

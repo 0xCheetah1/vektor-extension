@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VEKTOR Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css" />
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">VEKTOR CONTROL</p>
+        <h1>Launch cockpit for memeable X posts.</h1>
+        <p class="copy">Connect wallet, verify Robinhood Chain, and keep launch settings in one full-page dashboard.</p>
+        <div class="actions">
+          <button id="connectWallet">Connect wallet</button>
+          <button id="disconnectWallet" class="secondary">Disconnect</button>
+          <button id="openX" class="ghost">Open X</button>
+        </div>
+        <p id="status" class="status"></p>
+      </section>
+
+      <section class="grid">
+        <article class="card large">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Wallet</p>
+              <h2 id="walletStatus">Not connected</h2>
+            </div>
+            <span id="chainChip">Robinhood Chain required</span>
+          </div>
+          <dl>
+            <div>
+              <dt>Address</dt>
+              <dd id="walletAddress">No wallet connected.</dd>
+            </div>
+            <div>
+              <dt>Connected chain</dt>
+              <dd id="walletChain">Unknown</dd>
+            </div>
+            <div>
+              <dt>Connected at</dt>
+              <dd id="walletConnectedAt">Never</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="card">
+          <p class="eyebrow">Robinhood Chain</p>
+          <h2>Mainnet</h2>
+          <dl>
+            <div>
+              <dt>Chain ID</dt>
+              <dd>4663 / 0x1237</dd>
+            </div>
+            <div>
+              <dt>RPC</dt>
+              <dd>https://rpc.mainnet.chain.robinhood.com</dd>
+            </div>
+            <div>
+              <dt>Explorer</dt>
+              <dd>https://robinhoodchain.blockscout.com</dd>
+            </div>
+            <div>
+              <dt>Gas</dt>
+              <dd>ETH</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="card">
+          <p class="eyebrow">Button Logic</p>
+          <h2>X/Twitter Overlay</h2>
+          <ul>
+            <li>Score below 50: hidden.</li>
+            <li>Score 50-69: Ask VEKTOR.</li>
+            <li>Score 70+: Launch meme.</li>
+            <li>Replies are skipped.</li>
+          </ul>
+        </article>
+
+        <article class="card wide">
+          <p class="eyebrow">Wallet Bridge</p>
+          <h2>How connection works</h2>
+          <p class="copy">Wallet extensions normally inject providers into regular web pages, not extension pages. VEKTOR uses the X/Twitter tab as the bridge: this dashboard sends a request to the content script, the page asks MetaMask or another EVM wallet for accounts, then VEKTOR stores the public address and chain ID.</p>
+        </article>
+      </section>
+    </main>
+    <script src="dashboard.js"></script>
+  </body>
+</html>

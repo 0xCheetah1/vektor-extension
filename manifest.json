@@ -20,6 +20,10 @@
     "default_popup": "src/popup.html",
     "default_title": "VEKTOR"
   },
+  "options_ui": {
+    "page": "src/dashboard.html",
+    "open_in_tab": true
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "vektor-meme-launcher@vektor.local",

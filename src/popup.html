@@ -26,6 +26,10 @@
       </section>
 
       <section class="panel">
+        <button id="openDashboard" class="dashboard-button">Open VEKTOR dashboard</button>
+      </section>
+
+      <section class="panel">
         <div class="panel-head">
           <h2>Wallet</h2>
           <span id="walletChip">Required before launch</span>
@@ -33,7 +37,7 @@
         <p id="walletAddress" class="address">No wallet connected.</p>
         <button id="connectWallet">Connect browser wallet</button>
         <button id="disconnectWallet" class="secondary">Disconnect</button>
-        <p class="hint">VEKTOR will request your injected EVM wallet from the active X tab. Robinhood Chain switching will activate after chain ID and RPC are configured.</p>
+        <p class="hint">VEKTOR requests your EVM wallet through the active X tab, then switches it to Robinhood Chain.</p>
       </section>
 
       <p id="status"></p>
