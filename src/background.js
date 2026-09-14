@@ -6,8 +6,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const AGENT_PROXY_ENDPOINTS = [
-  "http://158.220.89.254:8787/api/generate-token-plan",
-  "http://100.92.181.120:8787/api/generate-token-plan",
+  "http://thecheetah11.com/vektor-agent/api/generate-token-plan",
   "http://localhost:8787/api/generate-token-plan",
 ];
 const ROBINHOOD_CHAIN = {

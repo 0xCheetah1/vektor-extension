@@ -5,6 +5,7 @@ const path = require("path");
 loadEnvFile(path.join(__dirname, ".env"));
 
 const PORT = Number(process.env.PORT || 8787);
+const HOST = process.env.HOST || "127.0.0.1";
 const PROVIDER = process.env.AGENT_PROVIDER || "deepseek";
 const DEEPSEEK_ENDPOINT = process.env.DEEPSEEK_ENDPOINT || "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
@@ -42,8 +43,8 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`VEKTOR agent proxy listening on http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`VEKTOR agent proxy listening on http://${HOST}:${PORT}`);
 });
 
 async function generateTokenPlan(payload) {

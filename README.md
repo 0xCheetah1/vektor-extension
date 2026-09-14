@@ -93,8 +93,7 @@ The full dashboard is available from the popup or Firefox extension options. For
 
 The extension tries these backend proxy URLs for VPS/local testing:
 
-- `http://158.220.89.254:8787/api/generate-token-plan`
-- `http://100.92.181.120:8787/api/generate-token-plan`
+- `http://thecheetah11.com/vektor-agent/api/generate-token-plan`
 - `http://localhost:8787/api/generate-token-plan`
 
 The backend owns the DeepSeek or Orbio API key through environment variables, so users never receive those keys in the extension.
