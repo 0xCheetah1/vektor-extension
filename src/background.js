@@ -1,5 +1,6 @@
 const DEFAULT_SETTINGS = {
   walletAddress: "",
+  walletChainId: "",
   walletConnectedAt: "",
 };
 
@@ -7,8 +8,14 @@ const INTERNAL_ORBIO_ENDPOINT = "";
 const INTERNAL_ORBIO_API_KEY = "";
 const ROBINHOOD_CHAIN = {
   name: "Robinhood Chain",
-  chainId: "",
-  rpcUrls: [],
+  chainId: "0x1237",
+  rpcUrls: ["https://rpc.mainnet.chain.robinhood.com"],
+  nativeCurrency: {
+    name: "Ether",
+    symbol: "ETH",
+    decimals: 18,
+  },
+  blockExplorerUrls: ["https://robinhoodchain.blockscout.com"],
 };
 
 chrome.runtime.onInstalled.addListener(async () => {

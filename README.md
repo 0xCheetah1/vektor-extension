@@ -5,6 +5,7 @@ Browser extension prototype for turning viral X/Twitter posts into memecoin laun
 ## What It Does
 
 - Injects a VEKTOR button into X/Twitter posts.
+- Skips reply cards so buttons stay focused on primary posts.
 - Captures visible tweet text, author text, URL, engagement labels, and launch-fit analytics.
 - Opens an overlay beside the feed.
 - Generates token name, ticker, meme thesis, launch copy, image prompt, risk flags, and launch steps.
@@ -78,11 +79,20 @@ npm run build:zip
 Open the extension popup to:
 
 - Connect or disconnect an injected browser wallet from the active X/Twitter tab.
+- Switch the browser wallet to Robinhood Chain mainnet when connecting.
 - Confirm wallet status before preparing a launch.
 - Confirm that agent routing is internal.
 
 ## Current Limits
 
 - No real token launch transaction is implemented yet.
-- Robinhood Chain switching is not enabled until the chain ID and RPC URLs are configured.
 - The current prototype creates a launch plan and safety checklist only.
+
+## Robinhood Chain
+
+- Mainnet chain ID: `4663` (`0x1237`)
+- Mainnet RPC: `https://rpc.mainnet.chain.robinhood.com`
+- Mainnet explorer: `https://robinhoodchain.blockscout.com`
+- Native gas token: `ETH`
+- Testnet chain ID: `46630` (`0xb626`)
+- Testnet RPC: `https://rpc.testnet.chain.robinhood.com`

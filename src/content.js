@@ -17,7 +17,7 @@ function init() {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "CONNECT_WALLET") {
-    requestWallet()
+    requestWallet(message.chain)
       .then((result) => sendResponse({ ok: true, result }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
@@ -39,7 +39,7 @@ function setupWalletBridge() {
   });
 }
 
-function requestWallet() {
+function requestWallet(chain) {
   return new Promise((resolve, reject) => {
     const requestId = `vektor-wallet-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -64,13 +64,14 @@ function requestWallet() {
     }
 
     window.addEventListener(requestId, onResponse);
-    window.postMessage({ source: "VEKTOR_CONTENT_WALLET_REQUEST", requestId }, "*");
+    window.postMessage({ source: "VEKTOR_CONTENT_WALLET_REQUEST", requestId, chain }, "*");
   });
 }
 
 function injectButtons() {
   document.querySelectorAll(SELECTORS.tweet).forEach((tweet) => {
     if (tweet.querySelector(".vektor-launch-button")) return;
+    if (!isLaunchablePost(tweet)) return;
 
     const tweetText = getTweetText(tweet);
     if (!tweetText) return;
@@ -90,6 +91,31 @@ function injectButtons() {
     const target = tweet.querySelector('[role="group"]') || tweet;
     target.appendChild(button);
   });
+}
+
+function isLaunchablePost(tweet) {
+  const articleText = tweet.textContent || "";
+  if (/\bReplying to\b/i.test(articleText)) return false;
+
+  const socialContext = tweet.querySelector('[data-testid="socialContext"]')?.textContent || "";
+  if (/\breplied\b/i.test(socialContext)) return false;
+
+  if (/\/status\/\d+/.test(location.pathname)) {
+    const main = tweet.closest('main[role="main"]') || document;
+    const currentStatusPath = location.pathname.match(/\/[^/]+\/status\/\d+/)?.[0];
+    const primaryTweet = Array.from(main.querySelectorAll(SELECTORS.tweet)).find((candidate) =>
+      Array.from(candidate.querySelectorAll('a[href*="/status/"]')).some((link) => {
+        try {
+          return currentStatusPath && new URL(link.href).pathname.includes(currentStatusPath);
+        } catch (_error) {
+          return false;
+        }
+      }),
+    );
+    return primaryTweet === tweet;
+  }
+
+  return true;
 }
 
 function openPanel(tweet) {
