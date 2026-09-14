@@ -5,7 +5,6 @@ VEKTOR is a browser extension for spotting memeable X/Twitter posts and turning 
 ## Features
 
 - Adds VEKTOR actions to high-signal X/Twitter posts.
-- Skips reply cards so actions stay focused on primary posts.
 - Scores posts using visible engagement, memeability, timing, originality, and risk signals.
 - Generates token name, ticker, meme thesis, launch copy, image prompt, risk flags, and launch steps.
 - Detects EVM contract addresses in primary posts and profile bios.
