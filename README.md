@@ -28,6 +28,7 @@ From the dashboard you can:
 - Chain ID: `4663`
 - Hex chain ID: `0x1237`
 - Native gas token: `ETH`
+- Explorer: `https://robin.etherscan.io`
 
 ## Local Development
 

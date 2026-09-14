@@ -26,6 +26,7 @@ Robinhood Chain context:
 - Target chain is Robinhood Chain mainnet.
 - Chain ID is 4663 / 0x1237.
 - Native gas token is ETH.
+- Explorer is https://robin.etherscan.io.
 - Do not invent launchpad API details. If launch execution details are missing, say that router/launchpad integration is pending.
 
 Output JSON shape:

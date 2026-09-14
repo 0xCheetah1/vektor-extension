@@ -22,7 +22,7 @@ const ROBINHOOD_CHAIN = {
     symbol: "ETH",
     decimals: 18,
   },
-  blockExplorerUrls: ["https://robinhoodchain.blockscout.com"],
+  blockExplorerUrls: ["https://robin.etherscan.io"],
 };
 
 chrome.runtime.onInstalled.addListener(async () => {

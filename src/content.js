@@ -514,6 +514,7 @@ function createTokenInfoRows(token) {
     ["Liquidity", token.liquidityUsd ? `$${formatDisplayNumber(token.liquidityUsd)}` : "Not indexed"],
     ["Market cap", token.marketCap ? `$${formatDisplayNumber(token.marketCap)}` : token.marketCapNote || "Not indexed"],
     ["Source", token.marketCapSource || "none"],
+    ["Explorer", token.explorerUrl || "https://robin.etherscan.io"],
   ].forEach(([label, value]) => {
     const row = document.createElement("div");
     const key = document.createElement("span");

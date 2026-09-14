@@ -11,6 +11,7 @@ const DEEPSEEK_ENDPOINT = process.env.DEEPSEEK_ENDPOINT || "https://api.deepseek
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 const ORBIO_ENDPOINT = process.env.ORBIO_ENDPOINT || "";
 const ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
+const ROBINHOOD_EXPLORER_URL = "https://robin.etherscan.io";
 const LAUNCH_SYSTEM_PROMPT = loadPromptFile(path.join(__dirname, "prompts", "launch-system.txt"));
 
 const server = http.createServer(async (request, response) => {
@@ -117,7 +118,8 @@ Tweet author: ${payload.author || "unknown"}
 Tweet text: ${payload.tweetText}
 Tweet URL: ${payload.tweetUrl || "unknown"}
 Launch analytics: ${JSON.stringify(payload.analytics || {}, null, 2)}
-Wallet connected: ${payload.walletAddress ? "yes" : "no"}`;
+Wallet connected: ${payload.walletAddress ? "yes" : "no"}
+Robinhood Chain explorer: ${ROBINHOOD_EXPLORER_URL}`;
 }
 
 async function getTokenInfo(contractAddress) {
@@ -143,6 +145,7 @@ async function getTokenInfo(contractAddress) {
     chain: "Robinhood Chain",
     chainId: 4663,
     isContract: true,
+    explorerUrl: `${ROBINHOOD_EXPLORER_URL}/address/${contractAddress}`,
     name: name || "Unknown token",
     symbol: symbol || "UNKNOWN",
     decimals,
