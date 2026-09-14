@@ -10,6 +10,7 @@ const PROVIDER = process.env.AGENT_PROVIDER || "deepseek";
 const DEEPSEEK_ENDPOINT = process.env.DEEPSEEK_ENDPOINT || "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 const ORBIO_ENDPOINT = process.env.ORBIO_ENDPOINT || "";
+const LAUNCH_SYSTEM_PROMPT = loadPromptFile(path.join(__dirname, "prompts", "launch-system.txt"));
 
 const server = http.createServer(async (request, response) => {
   setCorsHeaders(response);
@@ -65,7 +66,7 @@ async function callDeepSeek(payload) {
     body: JSON.stringify({
       model: DEEPSEEK_MODEL,
       messages: [
-        { role: "system", content: "You generate concise, launch-ready meme token plans from viral posts. Return JSON only." },
+        { role: "system", content: LAUNCH_SYSTEM_PROMPT },
         { role: "user", content: buildAgentPrompt(payload) },
       ],
       temperature: 0.4,
@@ -89,7 +90,7 @@ async function callOrbio(payload) {
     },
     body: JSON.stringify({
       messages: [
-        { role: "system", content: "You generate concise, launch-ready meme token plans from viral posts." },
+        { role: "system", content: LAUNCH_SYSTEM_PROMPT },
         { role: "user", content: buildAgentPrompt(payload) },
       ],
       temperature: 0.4,
@@ -103,10 +104,7 @@ async function callOrbio(payload) {
 }
 
 function buildAgentPrompt(payload) {
-  return `You are VEKTOR Meme Launcher for the Orbio hackathon.
-Analyze this X/Twitter post and generate a memecoin launch plan.
-Do not claim a token was launched unless a transaction hash is provided.
-Return JSON with keys: tokenName, ticker, memeThesis, viralAngle, launchCopy, imagePrompt, riskFlags, launchSteps.
+  return `Analyze this captured X/Twitter context and generate a VEKTOR token launch plan.
 
 Tweet author: ${payload.author || "unknown"}
 Tweet text: ${payload.tweetText}
@@ -166,4 +164,12 @@ function loadEnvFile(filePath) {
     const value = trimmed.slice(separator + 1).trim().replace(/^['"]|['"]$/g, "");
     if (key && process.env[key] === undefined) process.env[key] = value;
   });
+}
+
+function loadPromptFile(filePath) {
+  try {
+    return fs.readFileSync(filePath, "utf8").trim();
+  } catch (_error) {
+    return "You are VEKTOR. Return concise JSON token launch plans only.";
+  }
 }
