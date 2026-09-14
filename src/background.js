@@ -5,7 +5,11 @@ const DEFAULT_SETTINGS = {
   quickBuyAmounts: ["0.01", "0.05", "0.1"],
 };
 
-const AGENT_PROXY_ENDPOINT = "http://localhost:8787/api/generate-token-plan";
+const AGENT_PROXY_ENDPOINTS = [
+  "http://158.220.89.254:8787/api/generate-token-plan",
+  "http://100.92.181.120:8787/api/generate-token-plan",
+  "http://localhost:8787/api/generate-token-plan",
+];
 const ROBINHOOD_CHAIN = {
   name: "Robinhood Chain",
   chainId: "0x1237",
@@ -45,18 +49,28 @@ async function generateTokenPlan(payload) {
 }
 
 async function callAgentProxy(settings, payload) {
-  const response = await fetch(AGENT_PROXY_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      ...payload,
-      walletAddress: settings.walletAddress || "",
-    }),
-  });
+  let lastError = null;
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data?.error || `Agent proxy failed with ${response.status}`);
-  return typeof data.result === "string" ? data.result : JSON.stringify(data.result, null, 2);
+  for (const endpoint of AGENT_PROXY_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...payload,
+          walletAddress: settings.walletAddress || "",
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || `Agent proxy failed with ${response.status}`);
+      return typeof data.result === "string" ? data.result : JSON.stringify(data.result, null, 2);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new Error(lastError?.message || "No VEKTOR agent proxy is reachable.");
 }

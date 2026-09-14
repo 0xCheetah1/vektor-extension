@@ -91,7 +91,13 @@ The full dashboard is available from the popup or Firefox extension options. For
 
 ## Server-Side Agent Proxy
 
-The extension calls a backend proxy at `http://localhost:8787/api/generate-token-plan` for local testing. The backend owns the DeepSeek or Orbio API key through environment variables, so users never receive those keys in the extension.
+The extension tries these backend proxy URLs for VPS/local testing:
+
+- `http://158.220.89.254:8787/api/generate-token-plan`
+- `http://100.92.181.120:8787/api/generate-token-plan`
+- `http://localhost:8787/api/generate-token-plan`
+
+The backend owns the DeepSeek or Orbio API key through environment variables, so users never receive those keys in the extension.
 
 Create `server/.env` from `server/env.example` or export the variables in your shell:
 
