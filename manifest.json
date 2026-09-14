@@ -3,7 +3,7 @@
   "name": "VEKTOR Meme Launcher",
   "description": "Spot viral X posts, generate meme token metadata, and prepare token launches from an overlay.",
   "version": "0.1.0",
-  "permissions": ["activeTab", "storage", "https://x.com/*", "https://twitter.com/*"],
+  "permissions": ["activeTab", "storage", "https://x.com/*", "https://twitter.com/*", "http://localhost:8787/*"],
   "background": {
     "scripts": ["src/background.js"]
   },

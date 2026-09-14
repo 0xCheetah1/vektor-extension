@@ -11,7 +11,7 @@ Browser extension prototype for turning viral X/Twitter posts into memecoin laun
 - Opens an overlay beside the feed.
 - Generates token name, ticker, meme thesis, launch copy, image prompt, risk flags, and launch steps.
 - Opens a quick-buy speed dial with three saved ETH presets plus a custom amount for detected contract addresses.
-- Can route generation to an internal Orbio LLM endpoint when configured in the extension runtime.
+- Routes agent generation through a server-side proxy so API keys are never shipped to users.
 
 ## Test In Firefox Without Store Upload
 
@@ -89,20 +89,29 @@ Open the extension popup to:
 
 The full dashboard is available from the popup or Firefox extension options. For wallet connection, open it from the VEKTOR popup while an X/Twitter tab is active so the dashboard can route the request through the page wallet bridge.
 
-## Test Agent With DeepSeek
+## Server-Side Agent Proxy
 
-For local testing, create `/home/velo/vektor-extension/src/agent-config.local.js` from `src/agent-config.example.js` and add your DeepSeek API key there. That local file is ignored by git and excluded from packaged builds.
+The extension calls a backend proxy at `http://localhost:8787/api/generate-token-plan` for local testing. The backend owns the DeepSeek or Orbio API key through environment variables, so users never receive those keys in the extension.
 
-```js
-globalThis.VEKTOR_AGENT_CONFIG = {
-  provider: "deepseek",
-  endpoint: "https://api.deepseek.com/chat/completions",
-  apiKey: "YOUR_DEEPSEEK_API_KEY",
-  model: "deepseek-chat",
-};
+Create `server/.env` from `server/env.example` or export the variables in your shell:
+
+```bash
+export AGENT_PROVIDER=deepseek
+export DEEPSEEK_API_KEY=your_deepseek_api_key
+export DEEPSEEK_MODEL=deepseek-chat
+npm run server
 ```
 
-Reload the temporary Firefox add-on after creating or editing the local config file.
+Later, switch the server to Orbio without changing the extension:
+
+```bash
+export AGENT_PROVIDER=orbio
+export ORBIO_ENDPOINT=https://your-orbio-endpoint.example/api
+export ORBIO_API_KEY=your_orbio_api_key
+npm run server
+```
+
+For real users, deploy this server behind HTTPS and update `AGENT_PROXY_ENDPOINT` in `src/background.js` to that URL.
 
 ## Wallet Notes
 
