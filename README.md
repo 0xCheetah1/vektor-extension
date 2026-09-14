@@ -1,50 +1,35 @@
 # VEKTOR Meme Launcher Extension
 
-Browser extension prototype for turning viral X/Twitter posts into memecoin launch plans.
+VEKTOR is a browser extension for spotting memeable X/Twitter posts and turning them into launch-ready token plans.
 
-## What It Does
+## Features
 
-- Injects a VEKTOR button into X/Twitter posts.
-- Skips reply cards so buttons stay focused on primary posts.
-- Captures visible tweet text, author text, URL, engagement labels, and launch-fit analytics.
-- Detects EVM contract addresses in primary posts and profile bios.
-- Opens an overlay beside the feed.
+- Adds VEKTOR actions to high-signal X/Twitter posts.
+- Skips reply cards so actions stay focused on primary posts.
+- Scores posts using visible engagement, memeability, timing, originality, and risk signals.
 - Generates token name, ticker, meme thesis, launch copy, image prompt, risk flags, and launch steps.
-- Opens a quick-buy speed dial with three saved ETH presets plus a custom amount for detected contract addresses.
-- Routes agent generation through a server-side proxy so API keys are never shipped to users.
+- Detects EVM contract addresses in primary posts and profile bios.
+- Shows a quick-buy speed dial with saved preset amounts and a custom amount field.
+- Includes a full dashboard for wallet status and quick-buy presets.
 
-## Test In Firefox Without Store Upload
+## Dashboard
 
-Firefox lets you temporarily load unsigned extensions for local testing.
+Open the extension popup, then select `Open VEKTOR dashboard`.
 
-1. Open Firefox.
-2. Go to `about:debugging#/runtime/this-firefox`.
-3. Click `Load Temporary Add-on...`.
-4. Select this file: `/home/velo/vektor-extension/manifest.json`.
-5. Open `https://x.com` or `https://twitter.com`.
-6. Find a tweet and click the `Ask VEKTOR` or `Launch meme` button injected into the tweet action row.
+From the dashboard you can:
 
-Temporary add-ons unload when Firefox restarts. Reload the manifest from `about:debugging` when needed.
+- Connect or disconnect a browser wallet.
+- Check Robinhood Chain wallet status.
+- Set quick-buy preset amounts.
+- Review the active button/scoring behavior.
 
-This project currently uses Manifest V2 because Firefox's extension validator does not accept Manifest V3 background service workers in this local test setup.
+## Robinhood Chain
 
-## Test From The Local PC SSHFS Mount
+- Chain ID: `4663`
+- Hex chain ID: `0x1237`
+- Native gas token: `ETH`
 
-The live VPS project can be mounted on the local PC at:
-
-```text
-/home/TheCheetah11/vektor-extension
-```
-
-When that SSHFS mount is active, load this file in Firefox:
-
-```text
-/home/TheCheetah11/vektor-extension/manifest.json
-```
-
-Then updates made on the VPS appear in the mounted folder without downloading or unzipping another release.
-
-## Test With web-ext
+## Local Development
 
 Install dependencies:
 
@@ -52,87 +37,27 @@ Install dependencies:
 npm install
 ```
 
-Run syntax checks:
+Run checks:
 
 ```bash
 npm run check
-```
-
-Lint as a Firefox extension:
-
-```bash
 npm run lint:firefox
 ```
 
-Launch a clean Firefox test profile:
+Run the extension in a temporary Firefox profile:
 
 ```bash
 npm run run:firefox
 ```
 
-Build a local zip artifact:
+Build a local extension zip:
 
 ```bash
 npm run build:zip
 ```
 
-## Dashboard
-
-Open the extension popup to:
-
-- Open the full-page VEKTOR dashboard.
-- Connect or disconnect an injected browser wallet from the active X/Twitter tab.
-- Switch the browser wallet to Robinhood Chain mainnet when connecting.
-- Set the three quick-buy preset amounts used when a contract address is detected.
-- Confirm wallet status before preparing a launch.
-- Confirm that agent routing is internal.
-
-The full dashboard is available from the popup or Firefox extension options. For wallet connection, open it from the VEKTOR popup while an X/Twitter tab is active so the dashboard can route the request through the page wallet bridge.
-
-## Server-Side Agent Proxy
-
-The extension tries these backend proxy URLs for VPS/local testing:
-
-- `http://thecheetah11.com/vektor-agent/api/generate-token-plan`
-- `http://localhost:8787/api/generate-token-plan`
-
-The backend owns the DeepSeek or Orbio API key through environment variables, so users never receive those keys in the extension.
-
-Create `server/.env` from `server/env.example` or export the variables in your shell:
-
-```bash
-export AGENT_PROVIDER=deepseek
-export DEEPSEEK_API_KEY=your_deepseek_api_key
-export DEEPSEEK_MODEL=deepseek-chat
-npm run server
-```
-
-Later, switch the server to Orbio without changing the extension:
-
-```bash
-export AGENT_PROVIDER=orbio
-export ORBIO_ENDPOINT=https://your-orbio-endpoint.example/api
-export ORBIO_API_KEY=your_orbio_api_key
-npm run server
-```
-
-For real users, deploy this server behind HTTPS and update `AGENT_PROXY_ENDPOINT` in `src/background.js` to that URL.
-
-## Wallet Notes
-
-If Phantom shows `unsupported network`, VEKTOR will still save the connected address and show a warning. Switch Phantom to Robinhood Chain manually, then reconnect. This happens when the wallet provider rejects `wallet_switchEthereumChain` or `wallet_addEthereumChain` even though the wallet app knows the chain.
-
 ## Current Limits
 
-- No real token launch transaction is implemented yet.
-- No real quick-buy swap/router transaction is implemented yet.
-- The current prototype creates a launch plan and safety checklist only.
-
-## Robinhood Chain
-
-- Mainnet chain ID: `4663` (`0x1237`)
-- Mainnet RPC: `https://rpc.mainnet.chain.robinhood.com`
-- Mainnet explorer: `https://robinhoodchain.blockscout.com`
-- Native gas token: `ETH`
-- Testnet chain ID: `46630` (`0xb626`)
-- Testnet RPC: `https://rpc.testnet.chain.robinhood.com`
+- Token launch execution is not live yet.
+- Quick-buy execution is not live yet.
+- Generated plans should be reviewed before taking any onchain action.
