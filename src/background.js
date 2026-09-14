@@ -1,3 +1,9 @@
+try {
+  importScripts("agent-config.local.js");
+} catch (_error) {
+  globalThis.VEKTOR_AGENT_CONFIG = globalThis.VEKTOR_AGENT_CONFIG || {};
+}
+
 const DEFAULT_SETTINGS = {
   walletAddress: "",
   walletChainId: "",
@@ -7,6 +13,7 @@ const DEFAULT_SETTINGS = {
 
 const INTERNAL_ORBIO_ENDPOINT = "";
 const INTERNAL_ORBIO_API_KEY = "";
+const AGENT_CONFIG = globalThis.VEKTOR_AGENT_CONFIG || {};
 const ROBINHOOD_CHAIN = {
   name: "Robinhood Chain",
   chainId: "0x1237",
@@ -42,6 +49,10 @@ async function generateTokenPlan(payload) {
   const tweetText = payload?.tweetText?.trim();
   if (!tweetText) throw new Error("No tweet text captured.");
 
+  if (AGENT_CONFIG.provider === "deepseek" && AGENT_CONFIG.apiKey) {
+    return callDeepSeek(AGENT_CONFIG, settings, payload);
+  }
+
   if (INTERNAL_ORBIO_ENDPOINT) {
     return callOrbio(settings, payload);
   }
@@ -49,17 +60,31 @@ async function generateTokenPlan(payload) {
   return buildDemoPlan(payload, settings.walletAddress);
 }
 
-async function callOrbio(settings, payload) {
-  const prompt = `You are VEKTOR Meme Launcher for the Orbio hackathon.
-Analyze this X/Twitter post and generate a memecoin launch plan.
-Do not claim a token was launched unless a transaction hash is provided.
-Return JSON with keys: tokenName, ticker, memeThesis, viralAngle, launchCopy, imagePrompt, riskFlags, launchSteps.
+async function callDeepSeek(config, settings, payload) {
+  const prompt = buildAgentPrompt(settings, payload);
+  const response = await fetch(config.endpoint || "https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model || "deepseek-chat",
+      messages: [
+        { role: "system", content: "You generate concise, launch-ready meme token plans from viral posts. Return JSON only." },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.4,
+    }),
+  });
 
-Tweet author: ${payload.author || "unknown"}
-Tweet text: ${payload.tweetText}
-Tweet URL: ${payload.tweetUrl || "unknown"}
-Launch analytics: ${JSON.stringify(payload.analytics || {}, null, 2)}
-Wallet connected: ${settings.walletAddress ? "yes" : "no"}`;
+  if (!response.ok) throw new Error(`DeepSeek endpoint failed with ${response.status}`);
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content || JSON.stringify(data, null, 2);
+}
+
+async function callOrbio(settings, payload) {
+  const prompt = buildAgentPrompt(settings, payload);
 
   const response = await fetch(INTERNAL_ORBIO_ENDPOINT, {
     method: "POST",
@@ -80,6 +105,19 @@ Wallet connected: ${settings.walletAddress ? "yes" : "no"}`;
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content || data?.output || data?.text || data?.response;
   return typeof content === "string" ? content : JSON.stringify(data, null, 2);
+}
+
+function buildAgentPrompt(settings, payload) {
+  return `You are VEKTOR Meme Launcher for the Orbio hackathon.
+Analyze this X/Twitter post and generate a memecoin launch plan.
+Do not claim a token was launched unless a transaction hash is provided.
+Return JSON with keys: tokenName, ticker, memeThesis, viralAngle, launchCopy, imagePrompt, riskFlags, launchSteps.
+
+Tweet author: ${payload.author || "unknown"}
+Tweet text: ${payload.tweetText}
+Tweet URL: ${payload.tweetUrl || "unknown"}
+Launch analytics: ${JSON.stringify(payload.analytics || {}, null, 2)}
+Wallet connected: ${settings.walletAddress ? "yes" : "no"}`;
 }
 
 function buildDemoPlan(payload, walletAddress) {

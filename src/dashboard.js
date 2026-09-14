@@ -24,7 +24,7 @@ async function connectWallet() {
     };
     await chrome.storage.local.set(payload);
     renderStatus(payload);
-    flash("Wallet connected on Robinhood Chain.");
+    flash(response.result.chainSwitchError || "Wallet connected on Robinhood Chain.");
   } catch (error) {
     flash(error.message);
   } finally {

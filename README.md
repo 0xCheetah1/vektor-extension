@@ -89,6 +89,25 @@ Open the extension popup to:
 
 The full dashboard is available from the popup or Firefox extension options. For wallet connection, open it from the VEKTOR popup while an X/Twitter tab is active so the dashboard can route the request through the page wallet bridge.
 
+## Test Agent With DeepSeek
+
+For local testing, create `/home/velo/vektor-extension/src/agent-config.local.js` from `src/agent-config.example.js` and add your DeepSeek API key there. That local file is ignored by git and excluded from packaged builds.
+
+```js
+globalThis.VEKTOR_AGENT_CONFIG = {
+  provider: "deepseek",
+  endpoint: "https://api.deepseek.com/chat/completions",
+  apiKey: "YOUR_DEEPSEEK_API_KEY",
+  model: "deepseek-chat",
+};
+```
+
+Reload the temporary Firefox add-on after creating or editing the local config file.
+
+## Wallet Notes
+
+If Phantom shows `unsupported network`, VEKTOR will still save the connected address and show a warning. Switch Phantom to Robinhood Chain manually, then reconnect. This happens when the wallet provider rejects `wallet_switchEthereumChain` or `wallet_addEthereumChain` even though the wallet app knows the chain.
+
 ## Current Limits
 
 - No real token launch transaction is implemented yet.

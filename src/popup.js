@@ -22,7 +22,7 @@ async function connectWallet() {
     };
     await chrome.storage.local.set(payload);
     renderStatus(payload);
-    flash("Wallet connected.");
+    flash(response.result.chainSwitchError || "Wallet connected.");
   } catch (error) {
     flash(error.message);
   } finally {

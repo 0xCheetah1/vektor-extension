@@ -3,3 +3,4 @@ web-ext-artifacts/
 *.zip
 *.log
 .DS_Store
+src/agent-config.local.js
