@@ -8,24 +8,59 @@
   </head>
   <body>
     <main>
-      <p class="eyebrow">VEKTOR</p>
-      <h1>Meme Launcher</h1>
-      <p class="copy">Open X, find a post, and tap the VEKTOR overlay to generate a token launch plan.</p>
+      <section class="hero">
+        <p class="eyebrow">VEKTOR</p>
+        <h1>Meme Launcher</h1>
+        <p class="copy">Spot viral posts, generate meme token packages, and prepare launches from X.</p>
+      </section>
 
-      <label>
-        Wallet address
-        <input id="walletAddress" placeholder="0x..." />
-      </label>
-      <label>
-        Orbio LLM endpoint
-        <input id="orbioEndpoint" placeholder="https://..." />
-      </label>
-      <label>
-        Orbio API key
-        <input id="orbioApiKey" type="password" placeholder="optional" />
-      </label>
+      <section class="status-grid">
+        <div class="stat-card">
+          <span>Wallet</span>
+          <strong id="walletStatus">Not connected</strong>
+        </div>
+        <div class="stat-card">
+          <span>Agent</span>
+          <strong id="agentStatus">Demo mode</strong>
+        </div>
+      </section>
 
-      <button id="save">Save settings</button>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Wallet</h2>
+          <span id="walletChip">Required before launch</span>
+        </div>
+        <label>
+          Address
+          <input id="walletAddress" placeholder="0x..." />
+        </label>
+        <button id="connectWallet" class="secondary">Use saved wallet</button>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Agent Routing</h2>
+          <span>Orbio</span>
+        </div>
+        <label>
+          LLM endpoint
+          <input id="orbioEndpoint" placeholder="https://..." />
+        </label>
+        <label>
+          API key
+          <input id="orbioApiKey" type="password" placeholder="optional" />
+        </label>
+      </section>
+
+      <section class="panel compact">
+        <div class="panel-head">
+          <h2>Launch Mode</h2>
+          <span>Prototype</span>
+        </div>
+        <p>Current build generates launch plans only. Real wallet signing and token deployment are next.</p>
+      </section>
+
+      <button id="save">Save dashboard</button>
       <p id="status"></p>
     </main>
     <script src="popup.js"></script>

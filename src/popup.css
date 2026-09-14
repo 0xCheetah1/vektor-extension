@@ -3,49 +3,124 @@ body {
   color: white;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   margin: 0;
-  width: 340px;
+  width: 380px;
 }
 
 main {
-  padding: 18px;
+  background: radial-gradient(circle at 20% 0%, rgba(16, 185, 129, 0.18), transparent 34%), #030712;
+  padding: 14px;
+}
+
+.hero {
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 20px;
+  background: rgba(17, 24, 39, 0.78);
+  padding: 14px;
 }
 
 .eyebrow {
   color: #6ee7b7;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.2em;
-  margin: 0 0 8px;
+  margin: 0 0 7px;
 }
 
-h1 {
-  font-size: 24px;
+h1,
+h2,
+p {
   margin: 0;
 }
 
-.copy {
-  color: #9ca3af;
-  font-size: 13px;
-  line-height: 1.5;
+h1 {
+  font-size: 22px;
+  line-height: 1.1;
 }
 
+h2 {
+  font-size: 13px;
+}
+
+.copy,
+.panel p {
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 8px;
+}
+
+.status-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 10px;
+}
+
+.stat-card,
+.panel {
+  background: rgba(17, 24, 39, 0.88);
+  border: 1px solid rgba(55, 65, 81, 0.9);
+  border-radius: 18px;
+}
+
+.stat-card {
+  padding: 11px;
+}
+
+.stat-card span,
 label {
   color: #9ca3af;
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  margin-top: 12px;
+}
+
+.stat-card strong {
+  color: #f9fafb;
+  display: block;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.panel {
+  margin-top: 10px;
+  padding: 12px;
+}
+
+.panel.compact {
+  padding: 11px 12px;
+}
+
+.panel-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panel-head span {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.24);
+  border-radius: 999px;
+  color: #6ee7b7;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 8px;
+}
+
+label {
+  margin-top: 10px;
 }
 
 input {
-  background: #111827;
+  background: #030712;
   border: 1px solid #374151;
   border-radius: 12px;
   box-sizing: border-box;
   color: white;
-  margin-top: 6px;
+  margin-top: 5px;
   outline: none;
-  padding: 10px;
+  padding: 9px 10px;
   width: 100%;
 }
 
@@ -55,14 +130,23 @@ button {
   border-radius: 14px;
   color: #030712;
   cursor: pointer;
+  font-size: 12px;
   font-weight: 900;
-  margin-top: 14px;
-  padding: 12px;
+  margin-top: 12px;
+  padding: 11px;
   width: 100%;
+}
+
+button.secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
+  margin-top: 10px;
 }
 
 #status {
   color: #6ee7b7;
   font-size: 12px;
   min-height: 18px;
+  padding-top: 8px;
 }
