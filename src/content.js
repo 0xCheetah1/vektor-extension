@@ -6,7 +6,10 @@ const SELECTORS = {
 
 const state = {
   openPanel: null,
+  closeHandlers: null,
 };
+
+const LAUNCH_THRESHOLD = 70;
 
 function init() {
   setupWalletBridge();
@@ -80,7 +83,8 @@ function injectButtons() {
     button.className = "vektor-launch-button";
     button.type = "button";
     const analytics = analyzeLaunchFit(tweet, tweetText);
-    button.textContent = analytics.launchFitScore >= 70 ? "Launch meme" : "Ask VEKTOR";
+    if (analytics.launchFitScore < LAUNCH_THRESHOLD) return;
+    button.textContent = "Launch meme";
     button.title = "Generate a memecoin plan from this post";
     button.addEventListener("click", (event) => {
       event.preventDefault();
@@ -119,7 +123,7 @@ function isLaunchablePost(tweet) {
 }
 
 function openPanel(tweet) {
-  state.openPanel?.remove();
+  closePanel();
 
   const payload = {
     tweetText: getTweetText(tweet),
@@ -144,8 +148,36 @@ function openPanel(tweet) {
   document.body.appendChild(panel);
   state.openPanel = panel;
 
-  panel.querySelector(".vektor-close").addEventListener("click", () => panel.remove());
+  panel.querySelector(".vektor-close").addEventListener("click", closePanel);
   panel.querySelector(".vektor-generate").addEventListener("click", () => generatePlan(panel, payload));
+  setupPanelDismiss(panel);
+}
+
+function setupPanelDismiss(panel) {
+  const onPointerDown = (event) => {
+    if (panel.contains(event.target)) return;
+    closePanel();
+  };
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") closePanel();
+  };
+
+  state.closeHandlers = { onPointerDown, onKeyDown };
+  setTimeout(() => {
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
+  }, 0);
+}
+
+function closePanel() {
+  if (state.closeHandlers) {
+    document.removeEventListener("pointerdown", state.closeHandlers.onPointerDown, true);
+    document.removeEventListener("keydown", state.closeHandlers.onKeyDown, true);
+    state.closeHandlers = null;
+  }
+
+  state.openPanel?.remove();
+  state.openPanel = null;
 }
 
 async function generatePlan(panel, payload) {
