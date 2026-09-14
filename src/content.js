@@ -9,9 +9,63 @@ const state = {
 };
 
 function init() {
+  setupWalletBridge();
   injectButtons();
   const observer = new MutationObserver(() => injectButtons());
   observer.observe(document.body, { childList: true, subtree: true });
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "CONNECT_WALLET") {
+    requestWallet()
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+});
+
+function setupWalletBridge() {
+  if (document.documentElement.dataset.vektorWalletBridge === "ready") return;
+  document.documentElement.dataset.vektorWalletBridge = "ready";
+
+  const script = document.createElement("script");
+  script.src = chrome.runtime.getURL("src/page-wallet.js");
+  script.onload = () => script.remove();
+  (document.head || document.documentElement).appendChild(script);
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window || event.data?.source !== "VEKTOR_PAGE_WALLET_RESPONSE") return;
+    window.dispatchEvent(new CustomEvent(event.data.requestId, { detail: event.data }));
+  });
+}
+
+function requestWallet() {
+  return new Promise((resolve, reject) => {
+    const requestId = `vektor-wallet-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const timeout = setTimeout(() => {
+      window.removeEventListener(requestId, onResponse);
+      reject(new Error("Wallet request timed out."));
+    }, 30000);
+
+    function onResponse(event) {
+      clearTimeout(timeout);
+      window.removeEventListener(requestId, onResponse);
+      const detail = event.detail || {};
+      if (detail.error) {
+        reject(new Error(detail.error));
+        return;
+      }
+      if (!detail.address) {
+        reject(new Error("Wallet returned no account."));
+        return;
+      }
+      resolve({ address: detail.address });
+    }
+
+    window.addEventListener(requestId, onResponse);
+    window.postMessage({ source: "VEKTOR_CONTENT_WALLET_REQUEST", requestId }, "*");
+  });
 }
 
 function injectButtons() {
@@ -24,7 +78,8 @@ function injectButtons() {
     const button = document.createElement("button");
     button.className = "vektor-launch-button";
     button.type = "button";
-    button.textContent = scoreTweet(tweetText) >= 70 ? "Launch meme" : "Ask VEKTOR";
+    const analytics = analyzeLaunchFit(tweet, tweetText);
+    button.textContent = analytics.launchFitScore >= 70 ? "Launch meme" : "Ask VEKTOR";
     button.title = "Generate a memecoin plan from this post";
     button.addEventListener("click", (event) => {
       event.preventDefault();
@@ -44,14 +99,16 @@ function openPanel(tweet) {
     tweetText: getTweetText(tweet),
     author: getAuthor(tweet),
     tweetUrl: getTweetUrl(tweet),
-    score: scoreTweet(getTweetText(tweet)),
+    analytics: analyzeLaunchFit(tweet, getTweetText(tweet)),
   };
+  payload.score = payload.analytics.launchFitScore;
 
   const panel = document.createElement("section");
   panel.className = "vektor-panel";
   panel.append(
     createHeader(),
-    createSignal(payload.score),
+    createSignal(payload.analytics),
+    createBreakdown(payload.analytics),
     createTweetQuote(payload.tweetText),
     createExtraInput(),
     createGenerateButton(),
@@ -100,14 +157,116 @@ function getTweetUrl(tweet) {
   return anchor?.href || location.href;
 }
 
-function scoreTweet(text) {
+function analyzeLaunchFit(tweet, text) {
   const lower = text.toLowerCase();
-  let score = Math.min(55, Math.round(text.length / 3));
-  if (/[!?]{2,}/.test(text)) score += 10;
-  if (/\b(ai|crypto|solana|base|eth|btc|meme|coin|viral|trenches|degen|pump)\b/.test(lower)) score += 15;
-  if (text.length < 280) score += 10;
-  if (/\bwe are so back|it is over|send it|retail|ticker|cto\b/.test(lower)) score += 10;
-  return Math.max(1, Math.min(100, score));
+  const engagement = getEngagement(tweet);
+  const memeability = scoreMemeability(text, lower);
+  const socialEnergy = scoreSocialEnergy(text, lower, engagement);
+  const timeliness = scoreTimeliness(text, lower, engagement);
+  const originality = scoreOriginality(text, lower);
+  const riskFlags = getRiskFlags(text, lower);
+  const riskPenalty = Math.min(30, riskFlags.length * 8);
+  const launchFitScore = clamp(Math.round(memeability * 0.35 + socialEnergy * 0.3 + timeliness * 0.2 + originality * 0.15 - riskPenalty));
+
+  return {
+    launchFitScore,
+    label: getLaunchLabel(launchFitScore),
+    memeability,
+    socialEnergy,
+    timeliness,
+    originality,
+    riskFlags,
+    engagement,
+    thesis: buildThesis({ text, launchFitScore, memeability, socialEnergy, timeliness, originality, riskFlags }),
+  };
+}
+
+function getEngagement(tweet) {
+  const values = {};
+  const labels = [
+    ["reply", /reply/i],
+    ["repost", /repost|retweet/i],
+    ["like", /like/i],
+    ["view", /view/i],
+  ];
+
+  tweet.querySelectorAll('[role="group"] [aria-label], a[aria-label]').forEach((node) => {
+    const label = node.getAttribute("aria-label") || "";
+    labels.forEach(([key, regex]) => {
+      if (values[key] !== undefined || !regex.test(label)) return;
+      const parsed = parseCount(label);
+      if (parsed !== null) values[key] = parsed;
+    });
+  });
+
+  return values;
+}
+
+function parseCount(value) {
+  const match = value.replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*([kmb])?/i);
+  if (!match) return null;
+  const multiplier = { k: 1_000, m: 1_000_000, b: 1_000_000_000 }[match[2]?.toLowerCase()] || 1;
+  return Math.round(Number(match[1]) * multiplier);
+}
+
+function scoreMemeability(text, lower) {
+  let score = text.length < 220 ? 36 : 22;
+  if (/\b(ai|crypto|eth|btc|meme|coin|viral|trenches|degen|pump|ticker|cto|mascot)\b/.test(lower)) score += 24;
+  if (/\bwe are so back|it is over|send it|retail|anon|lore|cult|goblin|frog|cat|dog\b/.test(lower)) score += 18;
+  if (/[!?]{2,}|\p{Extended_Pictographic}/u.test(text)) score += 10;
+  if (/\$[a-z0-9]{2,10}/i.test(text)) score += 8;
+  return clamp(score);
+}
+
+function scoreSocialEnergy(text, lower, engagement) {
+  const total = (engagement.reply || 0) * 4 + (engagement.repost || 0) * 3 + (engagement.like || 0) + (engagement.view || 0) * 0.02;
+  let score = Math.min(70, Math.round(Math.log10(total + 1) * 18));
+  if (/\bquote|ratio|everyone|timeline|breaking|wait|watch\b/.test(lower)) score += 12;
+  if (text.length < 140) score += 8;
+  return clamp(score);
+}
+
+function scoreTimeliness(text, lower, engagement) {
+  let score = 42;
+  if (/\bnow|today|just|breaking|live|new|launched|hours?|minutes?\b/.test(lower)) score += 22;
+  if ((engagement.view || 0) >= 10000 && ((engagement.like || 0) >= 100 || (engagement.repost || 0) >= 25)) score += 20;
+  if (/https?:\/\//i.test(text)) score -= 8;
+  return clamp(score);
+}
+
+function scoreOriginality(text, lower) {
+  let score = 58;
+  if (/^rt\b|giveaway|airdrop|whitelist|presale/i.test(lower)) score -= 25;
+  if (text.length > 320) score -= 15;
+  if (/\bcopy|stolen|fake|scam|impersonat/i.test(lower)) score -= 20;
+  if (/\bfirst|only|new|nobody|invented|lore\b/.test(lower)) score += 12;
+  return clamp(score);
+}
+
+function getRiskFlags(text, lower) {
+  const flags = [];
+  if (/\b(disney|nintendo|pokemon|marvel|tesla|apple|nike|robinhood)\b/.test(lower)) flags.push("Possible protected brand/IP reference");
+  if (/\bpresale|airdrop|guaranteed|100x|risk[- ]?free|free money\b/.test(lower)) flags.push("Promotional or scam-adjacent wording");
+  if (/\bkill|hate|slur|violence\b/.test(lower)) flags.push("Unsafe or inflammatory wording");
+  if (text.length < 12) flags.push("Too little context for a reliable launch thesis");
+  return flags;
+}
+
+function getLaunchLabel(score) {
+  if (score >= 82) return "Prime launch candidate";
+  if (score >= 70) return "Launchable with review";
+  if (score >= 52) return "Watchlist";
+  return "Weak launch fit";
+}
+
+function buildThesis(analytics) {
+  if (analytics.riskFlags.length) return "Usable only after risk review because the post has potential compliance or originality issues.";
+  if (analytics.launchFitScore >= 70) return "This post has enough meme clarity, social energy, and timing to justify preparing a token launch package.";
+  return "This post needs stronger engagement, a cleaner meme hook, or fresher timing before launch.";
+}
+
+function clamp(value) {
+  return Math.max(1, Math.min(100, value));
 }
 
 function createHeader() {
@@ -130,15 +289,31 @@ function createHeader() {
   return header;
 }
 
-function createSignal(score) {
+function createSignal(analytics) {
   const signal = document.createElement("div");
   signal.className = "vektor-signal";
   const label = document.createElement("span");
-  label.textContent = "Virality score";
+  label.textContent = analytics.label;
   const value = document.createElement("strong");
-  value.textContent = `${score}/100`;
+  value.textContent = `${analytics.launchFitScore}/100`;
   signal.append(label, value);
   return signal;
+}
+
+function createBreakdown(analytics) {
+  const list = document.createElement("div");
+  list.className = "vektor-breakdown";
+  [
+    ["Memeability", analytics.memeability],
+    ["Social energy", analytics.socialEnergy],
+    ["Timing", analytics.timeliness],
+    ["Originality", analytics.originality],
+  ].forEach(([label, value]) => {
+    const item = document.createElement("span");
+    item.textContent = `${label}: ${value}`;
+    list.appendChild(item);
+  });
+  return list;
 }
 
 function createTweetQuote(tweetText) {

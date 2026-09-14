@@ -5,10 +5,10 @@ Browser extension prototype for turning viral X/Twitter posts into memecoin laun
 ## What It Does
 
 - Injects a VEKTOR button into X/Twitter posts.
-- Captures visible tweet text, author text, URL, and a simple virality score.
+- Captures visible tweet text, author text, URL, engagement labels, and launch-fit analytics.
 - Opens an overlay beside the feed.
 - Generates token name, ticker, meme thesis, launch copy, image prompt, risk flags, and launch steps.
-- Can route generation to an Orbio LLM endpoint from extension settings.
+- Can route generation to an internal Orbio LLM endpoint when configured in the extension runtime.
 
 ## Test In Firefox Without Store Upload
 
@@ -73,16 +73,16 @@ Build a local zip artifact:
 npm run build:zip
 ```
 
-## Settings
+## Dashboard
 
-Open the extension popup to set:
+Open the extension popup to:
 
-- Wallet address
-- Orbio LLM endpoint
-- Optional Orbio API key
+- Connect or disconnect an injected browser wallet from the active X/Twitter tab.
+- Confirm wallet status before preparing a launch.
+- Confirm that agent routing is internal.
 
 ## Current Limits
 
 - No real token launch transaction is implemented yet.
-- No real wallet provider signing is implemented yet.
+- Robinhood Chain switching is not enabled until the chain ID and RPC URLs are configured.
 - The current prototype creates a launch plan and safety checklist only.

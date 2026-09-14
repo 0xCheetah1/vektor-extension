@@ -15,6 +15,7 @@
       "run_at": "document_idle"
     }
   ],
+  "web_accessible_resources": ["src/page-wallet.js"],
   "browser_action": {
     "default_popup": "src/popup.html",
     "default_title": "VEKTOR"

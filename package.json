@@ -4,7 +4,7 @@
   "private": true,
   "description": "Browser extension prototype for turning viral X/Twitter posts into memecoin launch plans.",
   "scripts": {
-    "check": "node --check src/background.js && node --check src/content.js && node --check src/popup.js",
+    "check": "node --check src/background.js && node --check src/content.js && node --check src/page-wallet.js && node --check src/popup.js",
     "lint:firefox": "web-ext lint --source-dir . --ignore-files package.json package-lock.json README.md .gitignore web-ext-artifacts",
     "run:firefox": "web-ext run --source-dir . --start-url https://x.com",
     "build:zip": "web-ext build --source-dir . --artifacts-dir web-ext-artifacts --overwrite-dest"

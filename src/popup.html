@@ -21,7 +21,7 @@
         </div>
         <div class="stat-card">
           <span>Agent</span>
-          <strong id="agentStatus">Demo mode</strong>
+          <strong id="agentStatus">Internal</strong>
         </div>
       </section>
 
@@ -30,37 +30,12 @@
           <h2>Wallet</h2>
           <span id="walletChip">Required before launch</span>
         </div>
-        <label>
-          Address
-          <input id="walletAddress" placeholder="0x..." />
-        </label>
-        <button id="connectWallet" class="secondary">Use saved wallet</button>
+        <p id="walletAddress" class="address">No wallet connected.</p>
+        <button id="connectWallet">Connect browser wallet</button>
+        <button id="disconnectWallet" class="secondary">Disconnect</button>
+        <p class="hint">VEKTOR will request your injected EVM wallet from the active X tab. Robinhood Chain switching will activate after chain ID and RPC are configured.</p>
       </section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <h2>Agent Routing</h2>
-          <span>Orbio</span>
-        </div>
-        <label>
-          LLM endpoint
-          <input id="orbioEndpoint" placeholder="https://..." />
-        </label>
-        <label>
-          API key
-          <input id="orbioApiKey" type="password" placeholder="optional" />
-        </label>
-      </section>
-
-      <section class="panel compact">
-        <div class="panel-head">
-          <h2>Launch Mode</h2>
-          <span>Prototype</span>
-        </div>
-        <p>Current build generates launch plans only. Real wallet signing and token deployment are next.</p>
-      </section>
-
-      <button id="save">Save dashboard</button>
       <p id="status"></p>
     </main>
     <script src="popup.js"></script>
