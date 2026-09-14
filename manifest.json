@@ -1,0 +1,28 @@
+{
+  "manifest_version": 2,
+  "name": "VEKTOR Meme Launcher",
+  "description": "Spot viral X posts, generate meme token metadata, and prepare token launches from an overlay.",
+  "version": "0.1.0",
+  "permissions": ["activeTab", "storage", "https://x.com/*", "https://twitter.com/*"],
+  "background": {
+    "scripts": ["src/background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["src/content.js"],
+      "css": ["src/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_action": {
+    "default_popup": "src/popup.html",
+    "default_title": "VEKTOR"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "vektor-meme-launcher@vektor.local",
+      "strict_min_version": "109.0"
+    }
+  }
+}
