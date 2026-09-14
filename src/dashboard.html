@@ -79,10 +79,32 @@
           </ul>
         </article>
 
+        <article class="card">
+          <p class="eyebrow">Quick Buy</p>
+          <h2>Speed Dial</h2>
+          <p class="copy small">Set three ETH amounts for detected contract addresses.</p>
+          <form id="quickBuyForm" class="settings-form">
+            <label>
+              Preset 1
+              <input id="quickBuyAmount1" inputmode="decimal" placeholder="0.01" />
+            </label>
+            <label>
+              Preset 2
+              <input id="quickBuyAmount2" inputmode="decimal" placeholder="0.05" />
+            </label>
+            <label>
+              Preset 3
+              <input id="quickBuyAmount3" inputmode="decimal" placeholder="0.1" />
+            </label>
+            <button type="submit">Save buy presets</button>
+          </form>
+        </article>
+
         <article class="card wide">
           <p class="eyebrow">Wallet Bridge</p>
           <h2>How connection works</h2>
           <p class="copy">Wallet extensions normally inject providers into regular web pages, not extension pages. VEKTOR uses the X/Twitter tab as the bridge: this dashboard sends a request to the content script, the page asks MetaMask or another EVM wallet for accounts, then VEKTOR stores the public address and chain ID.</p>
+          <p class="copy">Quick buy detects EVM contract addresses in primary posts and profile bios. Execution is waiting on swap/router API details.</p>
         </article>
       </section>
     </main>

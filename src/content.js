@@ -2,6 +2,7 @@ const SELECTORS = {
   tweet: 'article[data-testid="tweet"]',
   tweetText: '[data-testid="tweetText"]',
   userName: '[data-testid="User-Name"]',
+  profileBio: '[data-testid="UserDescription"]',
 };
 
 const state = {
@@ -11,11 +12,16 @@ const state = {
 
 const ASK_THRESHOLD = 50;
 const LAUNCH_THRESHOLD = 70;
+const CONTRACT_ADDRESS_PATTERN = /\b0x[a-fA-F0-9]{40}\b/g;
 
 function init() {
   setupWalletBridge();
   injectButtons();
-  const observer = new MutationObserver(() => injectButtons());
+  injectBuyButtons();
+  const observer = new MutationObserver(() => {
+    injectButtons();
+    injectBuyButtons();
+  });
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
@@ -98,6 +104,43 @@ function injectButtons() {
   });
 }
 
+function injectBuyButtons() {
+  document.querySelectorAll(SELECTORS.tweet).forEach((tweet) => {
+    if (!isLaunchablePost(tweet)) return;
+    const contractAddress = findContractAddress(getTweetText(tweet));
+    if (!contractAddress) return;
+    injectBuyButton(tweet.querySelector('[role="group"]') || tweet, contractAddress, "post");
+  });
+
+  document.querySelectorAll(SELECTORS.profileBio).forEach((bio) => {
+    const contractAddress = findContractAddress(bio.textContent || "");
+    if (!contractAddress) return;
+    injectBuyButton(bio, contractAddress, "bio");
+  });
+}
+
+function injectBuyButton(target, contractAddress, source) {
+  if (target.querySelector(`.vektor-buy-button[data-ca="${contractAddress.toLowerCase()}"]`)) return;
+
+  const button = document.createElement("button");
+  button.className = "vektor-buy-button";
+  button.dataset.ca = contractAddress.toLowerCase();
+  button.type = "button";
+  button.textContent = "Buy token";
+  button.title = `Quick buy ${contractAddress}`;
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openBuyPanel(contractAddress, source);
+  });
+  target.appendChild(button);
+}
+
+function findContractAddress(text) {
+  CONTRACT_ADDRESS_PATTERN.lastIndex = 0;
+  return CONTRACT_ADDRESS_PATTERN.exec(text)?.[0] || "";
+}
+
 function isLaunchablePost(tweet) {
   const articleText = tweet.textContent || "";
   if (/\bReplying to\b/i.test(articleText)) return false;
@@ -154,6 +197,29 @@ function openPanel(tweet) {
   setupPanelDismiss(panel);
 }
 
+async function openBuyPanel(contractAddress, source) {
+  closePanel();
+  const settings = await chrome.storage.local.get(["quickBuyAmounts", "walletAddress", "walletChainId"]);
+  const amounts = normalizeQuickBuyAmounts(settings.quickBuyAmounts);
+  const panel = document.createElement("section");
+  panel.className = "vektor-panel";
+  panel.append(createBuyHeader(source), createContractBlock(contractAddress), createBuySpeedDial(amounts), createBuyOutput(settings));
+
+  document.body.appendChild(panel);
+  state.openPanel = panel;
+
+  panel.querySelector(".vektor-close").addEventListener("click", closePanel);
+  panel.querySelectorAll(".vektor-buy-option").forEach((button) => {
+    button.addEventListener("click", () => prepareBuy(panel, contractAddress, button.dataset.amount));
+  });
+  panel.querySelector(".vektor-custom-buy").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const amount = panel.querySelector(".vektor-custom-amount").value.trim();
+    prepareBuy(panel, contractAddress, amount);
+  });
+  setupPanelDismiss(panel);
+}
+
 function setupPanelDismiss(panel) {
   const onPointerDown = (event) => {
     if (panel.contains(event.target)) return;
@@ -198,6 +264,31 @@ async function generatePlan(panel, payload) {
       output.textContent = response?.ok ? response.result : response?.error || "Agent failed.";
     },
   );
+}
+
+function prepareBuy(panel, contractAddress, amount) {
+  const output = panel.querySelector(".vektor-output");
+  if (!Number(amount) || Number(amount) <= 0) {
+    output.textContent = "Enter a valid ETH amount.";
+    return;
+  }
+
+  output.textContent = JSON.stringify(
+    {
+      status: "Ready for router integration",
+      contractAddress,
+      amountEth: amount,
+      chain: "Robinhood Chain",
+      next: "Connect swap/router API to execute this buy from VEKTOR.",
+    },
+    null,
+    2,
+  );
+}
+
+function normalizeQuickBuyAmounts(amounts) {
+  const values = Array.isArray(amounts) ? amounts : ["0.01", "0.05", "0.1"];
+  return values.map((amount) => String(amount).trim()).filter(Boolean).slice(0, 3);
 }
 
 function getTweetText(tweet) {
@@ -346,6 +437,58 @@ function createHeader() {
 
   header.append(copy, close);
   return header;
+}
+
+function createBuyHeader(source) {
+  const header = createHeader();
+  header.querySelector("p").textContent = source === "bio" ? "VEKTOR TOKEN DETECTOR" : "VEKTOR CA DETECTOR";
+  header.querySelector("h2").textContent = "Quick buy detected token";
+  return header;
+}
+
+function createContractBlock(contractAddress) {
+  const block = document.createElement("div");
+  block.className = "vektor-contract";
+  const label = document.createElement("span");
+  label.textContent = "Contract address";
+  const value = document.createElement("strong");
+  value.textContent = contractAddress;
+  block.append(label, value);
+  return block;
+}
+
+function createBuySpeedDial(amounts) {
+  const wrap = document.createElement("div");
+  wrap.className = "vektor-buy-dial";
+  amounts.forEach((amount) => {
+    const button = document.createElement("button");
+    button.className = "vektor-buy-option";
+    button.type = "button";
+    button.dataset.amount = amount;
+    button.textContent = `${amount} ETH`;
+    wrap.appendChild(button);
+  });
+
+  const form = document.createElement("form");
+  form.className = "vektor-custom-buy";
+  const input = document.createElement("input");
+  input.className = "vektor-custom-amount";
+  input.inputMode = "decimal";
+  input.placeholder = "Custom ETH";
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  submit.textContent = "Buy custom";
+  form.append(input, submit);
+  wrap.appendChild(form);
+  return wrap;
+}
+
+function createBuyOutput(settings) {
+  const output = createOutput();
+  output.textContent = settings.walletAddress
+    ? "Pick a preset or enter a custom ETH amount. Router execution will be wired after buy API details are added."
+    : "Connect wallet from VEKTOR dashboard before executing a buy. Presets can still prepare the order preview.";
+  return output;
 }
 
 function createSignal(analytics) {

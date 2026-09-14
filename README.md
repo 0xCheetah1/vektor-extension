@@ -7,8 +7,10 @@ Browser extension prototype for turning viral X/Twitter posts into memecoin laun
 - Injects a VEKTOR button into X/Twitter posts.
 - Skips reply cards so buttons stay focused on primary posts.
 - Captures visible tweet text, author text, URL, engagement labels, and launch-fit analytics.
+- Detects EVM contract addresses in primary posts and profile bios.
 - Opens an overlay beside the feed.
 - Generates token name, ticker, meme thesis, launch copy, image prompt, risk flags, and launch steps.
+- Opens a quick-buy speed dial with three saved ETH presets plus a custom amount for detected contract addresses.
 - Can route generation to an internal Orbio LLM endpoint when configured in the extension runtime.
 
 ## Test In Firefox Without Store Upload
@@ -81,6 +83,7 @@ Open the extension popup to:
 - Open the full-page VEKTOR dashboard.
 - Connect or disconnect an injected browser wallet from the active X/Twitter tab.
 - Switch the browser wallet to Robinhood Chain mainnet when connecting.
+- Set the three quick-buy preset amounts used when a contract address is detected.
 - Confirm wallet status before preparing a launch.
 - Confirm that agent routing is internal.
 
@@ -89,6 +92,7 @@ The full dashboard is available from the popup or Firefox extension options. For
 ## Current Limits
 
 - No real token launch transaction is implemented yet.
+- No real quick-buy swap/router transaction is implemented yet.
 - The current prototype creates a launch plan and safety checklist only.
 
 ## Robinhood Chain

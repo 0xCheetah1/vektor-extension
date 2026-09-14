@@ -2,6 +2,7 @@ const DEFAULT_SETTINGS = {
   walletAddress: "",
   walletChainId: "",
   walletConnectedAt: "",
+  quickBuyAmounts: ["0.01", "0.05", "0.1"],
 };
 
 const INTERNAL_ORBIO_ENDPOINT = "";

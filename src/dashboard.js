@@ -1,9 +1,10 @@
-const STORAGE_FIELDS = ["walletAddress", "walletChainId", "walletConnectedAt"];
+const STORAGE_FIELDS = ["walletAddress", "walletChainId", "walletConnectedAt", "quickBuyAmounts"];
 const ROBINHOOD_CHAIN_ID = "0x1237";
 
 async function load() {
   const settings = await chrome.storage.local.get(STORAGE_FIELDS);
   renderStatus(settings);
+  renderQuickBuyAmounts(settings.quickBuyAmounts);
 }
 
 async function connectWallet() {
@@ -37,6 +38,18 @@ async function disconnectWallet() {
   await chrome.storage.local.set(payload);
   renderStatus(payload);
   flash("Wallet disconnected.");
+}
+
+async function saveQuickBuyAmounts(event) {
+  event.preventDefault();
+  const amounts = ["quickBuyAmount1", "quickBuyAmount2", "quickBuyAmount3"].map((id) => document.getElementById(id).value.trim());
+  if (amounts.some((amount) => !Number(amount) || Number(amount) <= 0)) {
+    flash("Use three valid ETH amounts.");
+    return;
+  }
+
+  await chrome.storage.local.set({ quickBuyAmounts: amounts });
+  flash("Quick buy presets saved.");
 }
 
 function sendWalletMessage(message) {
@@ -92,6 +105,13 @@ function renderStatus(settings) {
   chainChip.classList.toggle("ready", Boolean(ready));
 }
 
+function renderQuickBuyAmounts(amounts) {
+  const values = Array.isArray(amounts) && amounts.length ? amounts : ["0.01", "0.05", "0.1"];
+  ["quickBuyAmount1", "quickBuyAmount2", "quickBuyAmount3"].forEach((id, index) => {
+    document.getElementById(id).value = values[index] || "";
+  });
+}
+
 function shortAddress(address) {
   if (address.length <= 12) return address;
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -108,4 +128,5 @@ function flash(message) {
 document.getElementById("connectWallet").addEventListener("click", connectWallet);
 document.getElementById("disconnectWallet").addEventListener("click", disconnectWallet);
 document.getElementById("openX").addEventListener("click", openX);
+document.getElementById("quickBuyForm").addEventListener("submit", saveQuickBuyAmounts);
 load();
