@@ -25,6 +25,22 @@ Temporary add-ons unload when Firefox restarts. Reload the manifest from `about:
 
 This project currently uses Manifest V2 because Firefox's extension validator does not accept Manifest V3 background service workers in this local test setup.
 
+## Test From The Local PC SSHFS Mount
+
+The live VPS project can be mounted on the local PC at:
+
+```text
+/home/TheCheetah11/vektor-extension
+```
+
+When that SSHFS mount is active, load this file in Firefox:
+
+```text
+/home/TheCheetah11/vektor-extension/manifest.json
+```
+
+Then updates made on the VPS appear in the mounted folder without downloading or unzipping another release.
+
 ## Test With web-ext
 
 Install dependencies:
