@@ -17,9 +17,9 @@ const BASEDBID_BUY_PREVIEW_ENDPOINTS = [
   "http://thecheetah11.com/vektor-agent/api/basedbid/buy-preview",
   "http://localhost:8787/api/basedbid/buy-preview",
 ];
-const BASEDBID_CREATE_FLASH_ENDPOINTS = [
-  "http://thecheetah11.com/vektor-agent/api/basedbid/create-flash",
-  "http://localhost:8787/api/basedbid/create-flash",
+const ORBIO_LAUNCH_PREPARE_ENDPOINTS = [
+  "http://thecheetah11.com/vektor-agent/api/orbio/launch-prepare",
+  "http://localhost:8787/api/orbio/launch-prepare",
 ];
 const ETH_PRICE_ENDPOINTS = [
   "http://thecheetah11.com/vektor-agent/api/eth-price",
@@ -28,6 +28,10 @@ const ETH_PRICE_ENDPOINTS = [
 const IMAGE_GEN_ENDPOINTS = [
   "http://thecheetah11.com/vektor-agent/api/generate-image",
   "http://localhost:8787/api/generate-image",
+];
+const IMAGE_UPLOAD_ENDPOINTS = [
+  "http://thecheetah11.com/vektor-agent/api/upload-image",
+  "http://localhost:8787/api/upload-image",
 ];
 const ROBINHOOD_CHAIN = {
   name: "Robinhood Chain",
@@ -79,6 +83,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "UPLOAD_IMAGE") {
+    uploadImage(message.payload)
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message?.type === "PREPARE_BASEDBID_BUY") {
     prepareBasedBidBuy(message.payload)
       .then((result) => sendResponse({ ok: true, result }))
@@ -86,8 +97,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type === "PREPARE_BASEDBID_FLASH_LAUNCH") {
-    prepareBasedBidFlashLaunch(message.payload)
+  if (message?.type === "PREPARE_ORBIO_LAUNCH") {
+    prepareOrbioLaunch(message.payload)
       .then((result) => sendResponse({ ok: true, result }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
@@ -119,15 +130,15 @@ async function prepareBasedBidBuy(payload) {
   );
 }
 
-async function prepareBasedBidFlashLaunch(payload) {
+async function prepareOrbioLaunch(payload) {
   const settings = await getStorage(Object.keys(DEFAULT_SETTINGS));
   return postToFirstAvailable(
-    BASEDBID_CREATE_FLASH_ENDPOINTS,
+    ORBIO_LAUNCH_PREPARE_ENDPOINTS,
     {
       ...payload,
       account: payload?.account || settings.walletAddress || "",
     },
-    "No based.bid launch service is reachable.",
+    "No Orbio launch service is reachable.",
     { stringifyResult: false },
   );
 }
@@ -138,6 +149,10 @@ async function getEthPrice() {
 
 async function generateImage(payload) {
   return postToFirstAvailable(IMAGE_GEN_ENDPOINTS, payload, "No image generation service is reachable.", { stringifyResult: false });
+}
+
+async function uploadImage(payload) {
+  return postToFirstAvailable(IMAGE_UPLOAD_ENDPOINTS, payload, "No image upload service is reachable.", { stringifyResult: false });
 }
 
 function getStorage(keys) {

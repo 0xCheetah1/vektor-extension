@@ -1,7 +1,8 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { decodeFunctionResult, encodeFunctionData, parseEther, toHex } = require("viem");
+const crypto = require("crypto");
+const { decodeEventLog, decodeFunctionResult, encodeFunctionData, parseEther, toHex } = require("viem");
 
 loadEnvFile(path.join(__dirname, ".env"));
 
@@ -17,6 +18,10 @@ const ROBINHOOD_EXPLORER_URL = "https://robin.etherscan.io";
 const BASEDBID_SDK_API_URL = process.env.BASEDBID_SDK_API_URL || "https://static.based.bid/api";
 const BASEDBID_PLATFORM_URL = process.env.BASEDBID_PLATFORM_URL || "https://www.based.bid/api";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000";
+const ORBIO_TERMS_URL = process.env.ORBIO_TERMS_URL || "https://api.orbio.so/api/protocol/agents/terms";
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, "uploads");
+const ASSET_PUBLIC_BASE_URL = (process.env.ASSET_PUBLIC_BASE_URL || "https://thecheetah11.com/vektor-agent/assets").replace(/\/$/, "");
 const LAUNCH_SYSTEM_PROMPT = loadPromptFile(path.join(__dirname, "prompts", "launch-system.txt"));
 const TRADE_FACET_ABI = [
   {
@@ -37,6 +42,60 @@ const TRADE_FACET_ABI = [
   },
 ];
 const FLASH_LAUNCH_V4_ABI = readAbiFile(path.join(__dirname, "abi", "FlashLaunchForV4Facet.json"));
+const ORBIO_AGENT_LAUNCH_ABI = [
+  {
+    type: "function",
+    name: "launch",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "name", type: "string" },
+          { name: "symbol", type: "string" },
+          { name: "logo", type: "string" },
+          { name: "description", type: "string" },
+          {
+            name: "socials",
+            type: "tuple",
+            components: [
+              { name: "twitter", type: "string" },
+              { name: "telegram", type: "string" },
+              { name: "discord", type: "string" },
+              { name: "website", type: "string" },
+              { name: "farcaster", type: "string" },
+            ],
+          },
+          { name: "creatorFeeRecipient", type: "address" },
+          { name: "creatorTaxBps", type: "uint16" },
+          { name: "buybackEnabled", type: "bool" },
+          { name: "expectedEconomics", type: "bytes32" },
+          { name: "salt", type: "bytes32" },
+        ],
+      },
+      { name: "agentWallet", type: "address" },
+    ],
+    outputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "token", type: "address" },
+    ],
+  },
+  {
+    type: "event",
+    name: "AgentLaunched",
+    inputs: [
+      { name: "agentId", type: "uint256", indexed: true },
+      { name: "token", type: "address", indexed: true },
+      { name: "owner", type: "address", indexed: true },
+      { name: "receiver", type: "address", indexed: false },
+      { name: "agentWallet", type: "address", indexed: false },
+      { name: "beneficiary", type: "bytes32", indexed: false },
+      { name: "feeBps", type: "uint16", indexed: false },
+      { name: "launchedAt", type: "uint64", indexed: false },
+    ],
+  },
+];
 
 function readAbiFile(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -65,13 +124,24 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
-  if (request.method !== "POST" || !["/api/generate-token-plan", "/api/token-info", "/api/basedbid/buy-preview", "/api/basedbid/create-flash", "/api/basedbid/launch-receipt", "/api/generate-image"].includes(request.url)) {
+  if (request.method === "GET" && request.url?.startsWith("/assets/")) {
+    serveUploadedAsset(request, response);
+    return;
+  }
+
+  if (request.method !== "POST" || !["/api/generate-token-plan", "/api/token-info", "/api/basedbid/buy-preview", "/api/basedbid/create-flash", "/api/basedbid/launch-receipt", "/api/orbio/launch-prepare", "/api/orbio/launch-receipt", "/api/generate-image", "/api/upload-image"].includes(request.url)) {
     sendJson(response, 404, { ok: false, error: "Not found" });
     return;
   }
 
   try {
     const payload = await readJson(request);
+    if (request.url === "/api/upload-image") {
+      const result = await uploadPublicImage(payload?.dataUrl || "");
+      sendJson(response, 200, { ok: true, result });
+      return;
+    }
+
     if (request.url === "/api/generate-image") {
       const result = await generateTokenImage(payload?.prompt || "");
       sendJson(response, 200, { ok: true, result });
@@ -80,6 +150,12 @@ const server = http.createServer(async (request, response) => {
 
     if (request.url === "/api/basedbid/launch-receipt") {
       const result = await getLaunchReceipt(payload?.txHash || "", payload?.expectedSymbol || "");
+      sendJson(response, 200, { ok: true, result });
+      return;
+    }
+
+    if (request.url === "/api/orbio/launch-receipt") {
+      const result = await getOrbioLaunchReceipt(payload?.txHash || "", payload?.expectedSymbol || "");
       sendJson(response, 200, { ok: true, result });
       return;
     }
@@ -98,6 +174,12 @@ const server = http.createServer(async (request, response) => {
 
     if (request.url === "/api/basedbid/create-flash") {
       const result = await prepareBasedBidFlashLaunch(payload || {});
+      sendJson(response, 200, { ok: true, result });
+      return;
+    }
+
+    if (request.url === "/api/orbio/launch-prepare") {
+      const result = await prepareOrbioLaunch(payload || {});
       sendJson(response, 200, { ok: true, result });
       return;
     }
@@ -392,8 +474,8 @@ function extractAddress(result) {
 }
 
 async function prepareBasedBidFlashLaunch(payload) {
-  const account = String(payload.account || "").trim();
-  if (!/^0x[a-fA-F0-9]{40}$/.test(account)) throw new HttpError(400, "Connect an EVM wallet before launching.");
+  const account = String(payload.account || "").trim().toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(account)) throw new HttpError(400, "Connect an EVM wallet before launching.");
 
   const tokenName = cleanTokenName(payload.tokenName);
   const ticker = cleanTicker(payload.ticker);
@@ -482,6 +564,104 @@ async function prepareBasedBidFlashLaunch(payload) {
       totalSupply,
     },
   };
+}
+
+async function prepareOrbioLaunch(payload) {
+  const account = String(payload.account || "").trim().toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(account)) throw new HttpError(400, "Connect an EVM wallet before launching.");
+
+  const terms = await getOrbioLaunchTerms();
+  validateOrbioTerms(terms);
+
+  const tokenName = cleanOrbioTokenName(payload.tokenName);
+  const ticker = cleanOrbioTicker(payload.ticker);
+  const launchCopy = String(payload.launchCopy || "").slice(0, 280);
+  const memeThesis = String(payload.memeThesis || payload.description || "").slice(0, 600);
+  const description = String(payload.description || memeThesis || launchCopy || "").replace(/\s+/g, " ").trim().slice(0, 1000);
+  const logo = await resolveOrbioLogo(payload);
+  const requestedAgentWallet = String(payload.agentWallet || "").trim().toLowerCase();
+  const agentWallet = /^0x[a-f0-9]{40}$/.test(requestedAgentWallet) ? requestedAgentWallet : account;
+  const creatorTaxBps = parseCreatorTaxBps(payload.creatorTax ?? payload.creatorTaxPercent ?? 0, terms.maxCreatorTaxBps ?? 1000);
+
+  const params = {
+    name: tokenName,
+    symbol: ticker,
+    logo,
+    description,
+    socials: {
+      twitter: cleanHttpsUrl(payload.twitter || payload.tweetUrl || ""),
+      telegram: cleanHttpsUrl(payload.telegram || ""),
+      discord: cleanHttpsUrl(payload.discord || ""),
+      website: cleanHttpsUrl(payload.website || ""),
+      farcaster: cleanHttpsUrl(payload.farcaster || ""),
+    },
+    creatorFeeRecipient: ZERO_ADDRESS,
+    creatorTaxBps,
+    buybackEnabled: false,
+    expectedEconomics: terms.economics,
+    salt: ZERO_BYTES32,
+  };
+
+  const data = encodeFunctionData({ abi: ORBIO_AGENT_LAUNCH_ABI, functionName: "launch", args: [params, agentWallet] });
+  const valueWei = BigInt(terms.launchFeeWei);
+
+  return {
+    chain: "Robinhood Chain",
+    chainId: 4663,
+    launchpad: "orbio",
+    tokenName,
+    ticker,
+    logoUrl: logo,
+    agentWallet,
+    transaction: {
+      from: account,
+      to: terms.vault,
+      value: toHex(valueWei),
+      data,
+      chainId: "0x1237",
+    },
+    preview: {
+      to: terms.vault,
+      functionName: "launch",
+      valueWei: valueWei.toString(),
+      launchFeeEth: (Number(valueWei) / 1e18).toString(),
+      pairToken: terms.pairToken,
+      feeBps: terms.feeBps,
+      creatorTaxBps,
+      cliffSeconds: terms.cliffSeconds,
+      economics: terms.economics,
+    },
+  };
+}
+
+async function getOrbioLaunchTerms() {
+  const response = await fetch(ORBIO_TERMS_URL, { headers: { Accept: "application/json" } });
+  const body = await response.text();
+  if (!response.ok) throw new HttpError(response.status, `Orbio launch terms failed: ${body}`);
+  try {
+    return JSON.parse(body);
+  } catch (_error) {
+    throw new HttpError(502, "Orbio launch terms returned invalid JSON.");
+  }
+}
+
+function validateOrbioTerms(terms) {
+  if (!terms?.live) throw new HttpError(503, "Orbio launching is not live yet.");
+  if (terms.paused) throw new HttpError(503, "Orbio launching is paused.");
+  if (terms.chainId !== 4663) throw new HttpError(502, "Orbio returned non-Robinhood launch terms.");
+  if (!/^0x[a-fA-F0-9]{40}$/.test(terms.vault || "")) throw new HttpError(502, "Orbio returned no launch vault.");
+  if (!/^0x[a-fA-F0-9]{40}$/.test(terms.pairToken || "")) throw new HttpError(502, "Orbio returned no ORBIO pair token.");
+  if (!/^0x[a-fA-F0-9]{64}$/.test(terms.economics || "") || terms.economics === ZERO_BYTES32) throw new HttpError(502, "Orbio returned invalid economics.");
+  if (terms.pairApproved !== true) throw new HttpError(503, "Pons is not accepting ORBIO launches right now.");
+  if (!terms.launchFeeWei || BigInt(terms.launchFeeWei) < 0n) throw new HttpError(502, "Orbio returned invalid launch fee.");
+}
+
+async function resolveOrbioLogo(payload) {
+  const remoteUrl = cleanHttpsUrl(payload.logoUrl || "");
+  if (remoteUrl) return remoteUrl;
+  const dataUrl = String(payload.logoDataUrl || "").trim();
+  if (dataUrl.startsWith("data:image/")) return (await uploadPublicImage(dataUrl)).url;
+  return "";
 }
 
 async function uploadBasedBidMetadata(metadata) {
@@ -673,6 +853,64 @@ function dataUrlToBuffer(dataUrl) {
   return { buffer: Buffer.from(match[2], "base64"), mime: match[1] };
 }
 
+async function uploadPublicImage(dataUrl) {
+  const { buffer, mime } = dataUrlToBuffer(String(dataUrl || ""));
+  const extension = imageExtension(mime);
+  if (!extension) throw new HttpError(400, "Use a PNG, JPG, WebP, AVIF, or GIF image.");
+  if (!buffer.length) throw new HttpError(400, "Logo image is empty.");
+  if (buffer.length > 4 * 1024 * 1024) throw new HttpError(413, "Logo image must be under 4MB.");
+
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true, mode: 0o755 });
+  const digest = crypto.createHash("sha256").update(buffer).digest("hex").slice(0, 32);
+  const filename = `${digest}.${extension}`;
+  const filePath = path.join(UPLOAD_DIR, filename);
+  if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, buffer, { mode: 0o644 });
+
+  const localUrl = `${ASSET_PUBLIC_BASE_URL}/${filename}`;
+  let url = localUrl;
+  try {
+    if (buffer.length <= 1024 * 1024) url = await uploadBasedBidImage(buffer, "logo", mime);
+  } catch (_error) {
+    url = localUrl;
+  }
+
+  return { url, localUrl, bytes: buffer.length, mime };
+}
+
+function serveUploadedAsset(request, response) {
+  const filename = decodeURIComponent(new URL(request.url, "http://localhost").pathname.split("/").pop() || "");
+  if (!/^[a-f0-9]{32}\.(png|jpg|webp|avif|gif)$/.test(filename)) {
+    sendJson(response, 404, { ok: false, error: "Not found" });
+    return;
+  }
+
+  const filePath = path.join(UPLOAD_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    sendJson(response, 404, { ok: false, error: "Not found" });
+    return;
+  }
+
+  const extension = path.extname(filename).slice(1);
+  const mime = { png: "image/png", jpg: "image/jpeg", webp: "image/webp", avif: "image/avif", gif: "image/gif" }[extension] || "application/octet-stream";
+  response.writeHead(200, {
+    "Content-Type": mime,
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "Access-Control-Allow-Origin": "*",
+  });
+  fs.createReadStream(filePath).pipe(response);
+}
+
+function imageExtension(mime) {
+  return {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/webp": "webp",
+    "image/avif": "avif",
+    "image/gif": "gif",
+  }[String(mime || "").toLowerCase()] || "";
+}
+
 async function uploadBasedBidImage(buffer, name, mime = "image/png") {
   if (!buffer?.length) throw new HttpError(400, "Logo image is empty.");
   if (buffer.length > 1024 * 1024) throw new HttpError(413, "Logo image must be under 1MB.");
@@ -717,10 +955,43 @@ function cleanTicker(value) {
   return ticker;
 }
 
+function cleanOrbioTokenName(value) {
+  const name = String(value || "").replace(/\p{Cc}/gu, "").trim().slice(0, 64);
+  if (!name) throw new HttpError(400, "Token name is required.");
+  return name;
+}
+
+function cleanOrbioTicker(value) {
+  const ticker = String(value || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 12);
+  if (!/^[A-Z0-9]{1,12}$/.test(ticker)) throw new HttpError(400, "Symbol must be 1-12 letters or numbers.");
+  return ticker;
+}
+
 function cleanUrl(value) {
   const url = String(value || "").trim();
   if (!url) return "";
   return /^https?:\/\//i.test(url) ? url.slice(0, 300) : "";
+}
+
+function cleanHttpsUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" || url.username || url.password) return "";
+    return url.toString().slice(0, 2048);
+  } catch (_error) {
+    return "";
+  }
+}
+
+function parseCreatorTaxBps(value, maxBps) {
+  const text = String(value || "0").replace(/[^0-9.]/g, "").trim() || "0";
+  if (!/^\d{1,2}(\.\d{0,2})?$|^100(\.0{0,2})?$/.test(text)) throw new HttpError(400, "Creator fee must be a percent with at most two decimals.");
+  const [whole, fraction = ""] = text.split(".");
+  const bps = Number(whole) * 100 + Number(fraction.padEnd(2, "0").slice(0, 2));
+  if (bps < 0 || bps > Number(maxBps)) throw new HttpError(400, `Creator fee must be between 0% and ${Number(maxBps) / 100}%.`);
+  return bps;
 }
 
 function patchFlashLaunchApiArgs(functionName, args, marketCap) {
@@ -816,6 +1087,49 @@ async function getLaunchReceipt(txHash, expectedSymbol) {
       ...token,
       explorerUrl: `${ROBINHOOD_EXPLORER_URL}/token/${token.address}`,
       basedBidUrl: `https://trade.based.bid/robinhood/${token.address}`,
+    },
+  };
+}
+
+async function getOrbioLaunchReceipt(txHash, expectedSymbol) {
+  if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) throw new HttpError(400, "Invalid transaction hash.");
+
+  const receipt = await rpcCall("eth_getTransactionReceipt", [txHash]);
+  if (!receipt) return { status: "pending", txHash };
+  if (receipt.status !== "0x1") return { status: "failed", txHash };
+
+  let launched = null;
+  for (const log of receipt.logs || []) {
+    try {
+      const decoded = decodeEventLog({ abi: ORBIO_AGENT_LAUNCH_ABI, eventName: "AgentLaunched", data: log.data, topics: log.topics });
+      launched = { ...decoded.args, vault: log.address };
+      break;
+    } catch (_error) {
+      // Ignore non-Orbio logs.
+    }
+  }
+
+  if (!launched?.token) return { status: "confirmed", txHash, token: null };
+  const address = String(launched.token).toLowerCase();
+  const [name, symbol, decimals, totalSupply] = await Promise.all([
+    readTokenString(address, "0x06fdde03"),
+    readTokenString(address, "0x95d89b41"),
+    readTokenUint(address, "0x313ce567"),
+    readTokenUint(address, "0x18160ddd"),
+  ]);
+
+  return {
+    status: "confirmed",
+    txHash,
+    agentId: launched.agentId?.toString?.() || "",
+    token: {
+      address,
+      name: name || "Orbio agent token",
+      symbol: symbol || String(expectedSymbol || ""),
+      decimals,
+      totalSupply: formatTokenAmount(totalSupply, decimals),
+      explorerUrl: `${ROBINHOOD_EXPLORER_URL}/token/${address}`,
+      orbioUrl: `https://www.orbio.so/launchpad/${address}`,
     },
   };
 }
@@ -979,7 +1293,7 @@ function readJson(request) {
     let body = "";
     request.on("data", (chunk) => {
       body += chunk;
-      if (body.length > 64_000) {
+      if (body.length > 6_000_000) {
         reject(new HttpError(413, "Request body too large."));
         request.destroy();
       }

@@ -1,15 +1,15 @@
 # VEKTOR Meme Launcher Extension
 
-VEKTOR is a browser extension for spotting memeable X/Twitter posts, generating launch-ready token plans, and launching meme tokens on Robinhood Chain through based.bid.
+VEKTOR is a browser extension for spotting memeable X/Twitter posts, generating launch-ready token plans, and launching agent tokens on Robinhood Chain through Orbio Launchpad.
 
 ## Features
 
 - Adds VEKTOR actions to high-signal X/Twitter posts.
 - Scores posts using visible engagement, memeability, timing, and originality.
 - Generates a full launch package: token name, ticker, bio, launch copy, art prompt, and watch-outs.
-- Lets you edit project info before launching (name, ticker, bio, X, website, Telegram, market cap, supply, initial buy).
+- Lets you edit project info before launching (name, ticker, bio, X, website, Telegram, creator fee, agent wallet).
 - Logo support: use an image from the post (picks between multiple images), upload your own, or generate one with AI.
-- Launches the token on Robinhood Chain through based.bid, signed by your own wallet.
+- Launches the token on Robinhood Chain through Orbio/Pons, signed by your own wallet.
 - Quick-buy panel for EVM contract addresses found in posts and bios.
 - Dashboard with wallet status, launch history per wallet, and quick-buy presets.
 
@@ -42,8 +42,8 @@ Firefox temporary add-ons are removed when Firefox closes, so repeat steps 2–4
    - `Ask VEKTOR` for medium-signal posts (analysis only).
    - `Launch meme` for strong posts (full launch package).
 3. Click it, review the package, edit `Project info`, and pick a logo.
-4. Click `Launch token on Robinhood` and confirm the transaction in your wallet.
-5. The result shows the new token contract address and links to based.bid and the Robinhood explorer.
+4. Click `Launch on Orbio` and confirm the transaction in your wallet.
+5. The result shows the new token contract address and links to Orbio and the Robinhood explorer.
 
 ## Dashboard
 
@@ -51,14 +51,14 @@ Open the extension popup, then select `Open VEKTOR dashboard`. From there you ca
 
 - Connect or disconnect a browser wallet.
 - Check Robinhood Chain wallet status.
-- See launch history for the connected wallet (token address, based.bid link, explorer link).
+- See launch history for the connected wallet (token address, Orbio link, explorer link).
 - Set quick-buy preset amounts.
 
 Launch history is stored locally in your browser and grouped by wallet address.
 
 ## How it works
 
-- The extension talks to a VEKTOR server that generates plans with an AI model and prepares based.bid launch/buy transactions.
+- The extension talks to a VEKTOR server that generates plans with an AI model, hosts/mirrors launch logos, and prepares launch/buy transactions.
 - Transactions are signed and sent by your wallet on Robinhood Chain. VEKTOR never has access to your private keys or seed phrase.
 - The post you act on (text and images) is sent to the VEKTOR server for AI processing.
 

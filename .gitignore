@@ -7,3 +7,4 @@ web-ext-artifacts/
 src/agent-config.local.js
 .env
 server/.env
+server/uploads/

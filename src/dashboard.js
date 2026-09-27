@@ -64,7 +64,8 @@ function createHistoryItem(item) {
 
   const links = document.createElement("div");
   links.className = "history-links";
-  if (item.basedBidUrl) links.appendChild(historyLink(item.basedBidUrl, "based.bid"));
+  if (item.orbioUrl) links.appendChild(historyLink(item.orbioUrl, "Orbio"));
+  else if (item.basedBidUrl) links.appendChild(historyLink(item.basedBidUrl, "based.bid"));
   if (item.explorerUrl) links.appendChild(historyLink(item.explorerUrl, "Etherscan"));
   else if (item.explorerTxUrl) links.appendChild(historyLink(item.explorerTxUrl, "Tx"));
   row.appendChild(links);

@@ -17,21 +17,25 @@ const AGENT_PROXY_ENDPOINTS = [
   "http://thecheetah11.com/vektor-agent/api/generate-token-plan",
   "http://localhost:8787/api/generate-token-plan",
 ];
-const BASEDBID_CREATE_FLASH_ENDPOINTS = [
-  "http://thecheetah11.com/vektor-agent/api/basedbid/create-flash",
-  "http://localhost:8787/api/basedbid/create-flash",
+const ORBIO_LAUNCH_PREPARE_ENDPOINTS = [
+  "http://thecheetah11.com/vektor-agent/api/orbio/launch-prepare",
+  "http://localhost:8787/api/orbio/launch-prepare",
 ];
 const ETH_PRICE_ENDPOINTS = [
   "http://thecheetah11.com/vektor-agent/api/eth-price",
   "http://localhost:8787/api/eth-price",
 ];
 const LAUNCH_RECEIPT_ENDPOINTS = [
-  "http://thecheetah11.com/vektor-agent/api/basedbid/launch-receipt",
-  "http://localhost:8787/api/basedbid/launch-receipt",
+  "http://thecheetah11.com/vektor-agent/api/orbio/launch-receipt",
+  "http://localhost:8787/api/orbio/launch-receipt",
 ];
 const IMAGE_GEN_ENDPOINTS = [
   "http://thecheetah11.com/vektor-agent/api/generate-image",
   "http://localhost:8787/api/generate-image",
+];
+const IMAGE_UPLOAD_ENDPOINTS = [
+  "http://thecheetah11.com/vektor-agent/api/upload-image",
+  "http://localhost:8787/api/upload-image",
 ];
 
 let scanScheduled = false;
@@ -406,12 +410,10 @@ function createLaunchConfig(plan) {
     createLaunchInput("X / Twitter", "twitter", plan.twitter || plan.tweetUrl || ""),
     createLaunchInput("Website", "website", plan.website || ""),
     createLaunchInput("Telegram", "telegram", plan.telegram || ""),
-    createLaunchInput("Market cap", "marketCap", "10000", "number"),
-    createLaunchInput("Supply", "totalSupply", "1000000000", "number"),
-    createLaunchInput("Initial buy USDT", "initialBuyUsd", "0", "number"),
+    createLaunchInput("Extra creator fee %", "creatorTax", "0", "number"),
+    createLaunchInput("Agent wallet (optional)", "agentWallet", ""),
     createLogoField(plan.imageUrls, plan.imagePrompt),
   );
-  setupInitialBuyConverter(section);
   return section;
 }
 
@@ -425,7 +427,7 @@ function createLogoField(imageUrls, imagePrompt) {
 
   const file = document.createElement("input");
   file.type = "file";
-  file.accept = "image/png,image/jpeg,image/webp";
+  file.accept = "image/png,image/jpeg,image/webp,image/avif,image/gif";
   file.className = "vektor-logo-file";
 
   const label = document.createElement("label");
@@ -436,19 +438,29 @@ function createLogoField(imageUrls, imagePrompt) {
   preview.className = "vektor-logo-preview";
   preview.alt = "Token logo preview";
 
+  const status = document.createElement("span");
+  status.className = "vektor-image-gen-status";
+
   const options = document.createElement("div");
   options.className = "vektor-logo-options";
 
-  function applyLogo(source, value) {
+  async function applyLogo(source, value) {
     if (source === "post") {
       input.value = "";
       input.dataset.logoUrl = value;
+      status.textContent = "Post image ready for launch.";
     } else {
       input.value = value;
       delete input.dataset.logoUrl;
+      status.textContent = "Uploading logo for launch...";
     }
     preview.src = value;
     preview.hidden = false;
+    if (source !== "post") {
+      const uploaded = await uploadLogoImage(value);
+      input.dataset.logoUrl = uploaded.url;
+      status.textContent = "Logo uploaded and ready for Orbio.";
+    }
   }
 
   const postImages = (Array.isArray(imageUrls) ? imageUrls : []).filter(Boolean).slice(0, 4);
@@ -469,7 +481,7 @@ function createLogoField(imageUrls, imagePrompt) {
       thumbImage.alt = "Post image option";
       thumb.appendChild(thumbImage);
       thumb.addEventListener("click", () => {
-        applyLogo("post", url);
+        void applyLogo("post", url);
         row.querySelectorAll(".vektor-logo-thumb").forEach((node) => node.classList.toggle("selected", node === thumb));
       });
       row.appendChild(thumb);
@@ -480,12 +492,17 @@ function createLogoField(imageUrls, imagePrompt) {
   file.addEventListener("change", async () => {
     const chosen = file.files?.[0];
     if (!chosen) return;
-    const dataUrl = await resizeImageToDataUrl(chosen, 512);
-    applyLogo("custom", dataUrl);
+    try {
+      status.textContent = "Preparing logo...";
+      const dataUrl = await resizeImageToDataUrl(chosen, 512);
+      await applyLogo("custom", dataUrl);
+    } catch (error) {
+      status.textContent = error?.message || "Logo upload failed.";
+    }
   });
 
   const generator = createImageGenerator(imagePrompt, applyLogo);
-  wrap.append(label, input, options, generator, preview);
+  wrap.append(label, input, options, generator, preview, status);
   preview.hidden = true;
   return wrap;
 }
@@ -525,8 +542,8 @@ function createImageGenerator(imagePrompt, applyLogo) {
     try {
       const result = await generateImageWithFallback({ prompt: value });
       const compact = await downscaleDataUrl(result.dataUrl, 512);
-      applyLogo("custom", compact);
-      status.textContent = `Generated with ${result.source}. It's now your logo — generate again or upload to replace.`;
+      await applyLogo("custom", compact);
+      status.textContent = `Generated with ${result.source}. Uploaded and ready for launch.`;
       wrap.dataset.generated = "true";
     } catch (error) {
       status.textContent = error?.message || "Image generation failed.";
@@ -576,7 +593,10 @@ function createLaunchInput(labelText, name, value, type = "text") {
   input.type = type;
   input.value = value;
   if (type === "number") input.min = "0";
-  if (name === "initialBuyUsd") input.step = "1";
+  if (name === "creatorTax") {
+    input.step = "0.01";
+    input.max = "10";
+  }
   label.appendChild(input);
   return label;
 }
@@ -612,6 +632,15 @@ async function generateImageWithFallback(payload) {
     return await sendRuntimeMessage({ type: "GENERATE_IMAGE", payload });
   } catch (_runtimeError) {
     return postJsonToFirstAvailable(IMAGE_GEN_ENDPOINTS, payload);
+  }
+}
+
+async function uploadLogoImage(dataUrl) {
+  const payload = { dataUrl };
+  try {
+    return await sendRuntimeMessage({ type: "UPLOAD_IMAGE", payload });
+  } catch (_runtimeError) {
+    return postJsonToFirstAvailable(IMAGE_UPLOAD_ENDPOINTS, payload);
   }
 }
 
@@ -652,7 +681,7 @@ function createLaunchTokenButton(intent) {
   const button = document.createElement("button");
   button.className = "vektor-launch-token-action";
   button.type = "button";
-  button.textContent = intent === "prepare_launch" ? "Launch token on Robinhood" : "Launch anyway on Robinhood";
+  button.textContent = intent === "prepare_launch" ? "Launch on Orbio" : "Launch anyway on Orbio";
   button.addEventListener("click", () => launchToken(button, getEditedLaunchPlan(button)));
   return button;
 }
@@ -660,17 +689,15 @@ function createLaunchTokenButton(intent) {
 function getEditedLaunchPlan(button) {
   const config = button.closest(".vektor-result")?.querySelector(".vektor-launch-config");
   const get = (name) => config?.querySelector(`[name="${name}"]`)?.value?.trim() || "";
-  const initialBuyUsd = Number(get("initialBuyUsd") || 0);
   return {
     tokenName: get("tokenName"),
     ticker: get("ticker"),
-    marketCap: Number(get("marketCap") || 10000),
-    totalSupply: Number(get("totalSupply") || 1000000000),
-    initialBuyUsd,
     description: get("description"),
     twitter: get("twitter"),
     website: get("website"),
     telegram: get("telegram"),
+    creatorTax: get("creatorTax"),
+    agentWallet: get("agentWallet"),
     logoDataUrl: get("logoDataUrl"),
     logoUrl: config?.querySelector('[name="logoDataUrl"]')?.dataset.logoUrl || "",
   };
@@ -679,14 +706,14 @@ function getEditedLaunchPlan(button) {
 async function launchToken(button, plan) {
   const originalText = button.textContent;
   button.disabled = true;
-  button.textContent = "Preparing based.bid launch...";
+  button.textContent = "Preparing Orbio launch...";
 
   try {
     button.dataset.stage = "wallet connect";
     const chain = await getChainConfig();
     const wallet = await requestWallet(chain);
-    button.dataset.stage = "based.bid prep";
-    const preview = await prepareFlashLaunchWithFallback({ ...plan, account: wallet.address });
+    button.dataset.stage = "Orbio prep";
+    const preview = await prepareOrbioLaunchWithFallback({ ...plan, account: wallet.address });
     button.dataset.stage = "wallet submit";
     button.textContent = "Confirm launch in wallet...";
     const sent = await requestWalletTransaction(chain, preview.transaction);
@@ -699,6 +726,7 @@ async function launchToken(button, plan) {
       ticker: preview.ticker,
       txHash: sent.transactionHash,
       explorerTxUrl: `https://robin.etherscan.io/tx/${sent.transactionHash}`,
+      launchpad: "orbio",
       createdAt: new Date().toISOString(),
     });
     resolveLaunchToken(block, sent.transactionHash, preview.ticker);
@@ -711,11 +739,11 @@ async function launchToken(button, plan) {
   }
 }
 
-async function prepareFlashLaunchWithFallback(payload) {
+async function prepareOrbioLaunchWithFallback(payload) {
   try {
-    return await sendRuntimeMessage({ type: "PREPARE_BASEDBID_FLASH_LAUNCH", payload });
+    return await sendRuntimeMessage({ type: "PREPARE_ORBIO_LAUNCH", payload });
   } catch (_runtimeError) {
-    return postJsonToFirstAvailable(BASEDBID_CREATE_FLASH_ENDPOINTS, payload);
+    return postJsonToFirstAvailable(ORBIO_LAUNCH_PREPARE_ENDPOINTS, payload);
   }
 }
 
@@ -724,7 +752,7 @@ function formatLaunchError(stage, error) {
   if (/An unexpected error occurred/i.test(message)) {
     if (stage === "wallet connect") return "Wallet connect failed. Open MetaMask, enable it for X, then try again.";
     if (stage === "wallet submit") return "Wallet submit failed. Switch MetaMask to Robinhood Chain and make sure it has ETH for gas.";
-    if (stage === "based.bid prep") return "based.bid launch prep failed. Try a shorter name/ticker.";
+    if (stage === "Orbio prep") return "Orbio launch prep failed. Try a shorter name/ticker.";
   }
   return `${stage || "Launch"} failed: ${message}`;
 }
@@ -762,7 +790,7 @@ async function resolveLaunchToken(block, transactionHash, expectedSymbol) {
         await updateLaunchRecord(transactionHash, {
           tokenAddress: result.token.address,
           explorerUrl: result.token.explorerUrl,
-          basedBidUrl: result.token.basedBidUrl,
+          orbioUrl: result.token.orbioUrl,
         });
         return;
       }
@@ -788,10 +816,8 @@ function createLaunchTokenBlock(token) {
 
   const links = document.createElement("div");
   links.className = "vektor-token-links";
-  links.append(
-    createExternalLink(token.basedBidUrl, "Trade on based.bid"),
-    createExternalLink(token.explorerUrl, "Robinhood Etherscan"),
-  );
+  if (token.orbioUrl) links.append(createExternalLink(token.orbioUrl, "Open on Orbio"));
+  links.append(createExternalLink(token.explorerUrl, "Robinhood Etherscan"));
 
   block.append(heading, body, ca, links);
   return block;
@@ -817,7 +843,7 @@ function getUserRiskFlags(riskFlags) {
 function getDefaultNextAction(result, intent) {
   if (intent !== "prepare_launch") return "Keep watching this meme until the signal is stronger.";
   if (/watchlist|weak/i.test(result.launchReadiness || "")) return "Do not launch yet; use this as a draft unless you override the signal.";
-  return "Review the package, then use the launch action once based.bid deployment is connected.";
+  return "Review the package, then launch it through Orbio on Robinhood Chain.";
 }
 
 function parseAgentResult(result) {
