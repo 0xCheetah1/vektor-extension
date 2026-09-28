@@ -200,6 +200,7 @@ server.listen(PORT, HOST, () => {
 });
 
 async function generateTokenPlan(payload) {
+  if (payload?.intent === "analyze_only") return JSON.stringify(buildFastVerdict(payload));
   if (PROVIDER !== "orbio") return callDeepSeek(payload);
   try {
     return await callOrbio(payload);

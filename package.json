@@ -1,6 +1,6 @@
 {
   "name": "vektor-extension",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "description": "Browser extension prototype for turning viral X/Twitter posts into memecoin launch plans.",
   "scripts": {
