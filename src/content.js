@@ -1435,7 +1435,7 @@ function createTokenInfoBlock() {
 function createTokenInfoRows(token) {
   const wrap = document.createElement("div");
   wrap.className = "vektor-token-info-grid";
-  [
+  const rows = [
     ["Name", token.name || "Unknown token"],
     ["Symbol", token.symbol || "UNKNOWN"],
     ["Supply", token.totalSupply || "Unknown"],
@@ -1444,7 +1444,9 @@ function createTokenInfoRows(token) {
     ["Market cap", token.marketCap ? `$${formatDisplayNumber(token.marketCap)}` : token.marketCapNote || "Not indexed"],
     ["Source", token.marketCapSource || "none"],
     ["Explorer", token.explorerUrl || "https://robin.etherscan.io"],
-  ].forEach(([label, value]) => {
+  ];
+  if (token.fdv) rows.splice(6, 0, ["FDV", `$${formatDisplayNumber(token.fdv)}`]);
+  rows.forEach(([label, value]) => {
     const row = document.createElement("div");
     const key = document.createElement("span");
     const val = document.createElement("strong");

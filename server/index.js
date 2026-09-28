@@ -307,7 +307,75 @@ async function callOrbio(payload) {
   }
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content || data?.output || data?.text || data?.response;
+  if (intent === "analyze_only") return JSON.stringify(normalizeAskVerdict(content, payload));
   return typeof content === "string" ? content : JSON.stringify(data, null, 2);
+}
+
+function normalizeAskVerdict(content, payload) {
+  const parsed = parseJsonObject(content);
+  if (!parsed) {
+    return {
+      ...buildFastVerdict(payload),
+      verdict: "VEKTOR's fast model returned a malformed verdict, so this is a captured-signal fallback.",
+      whyItMightFail: "The agent response could not be safely parsed; ask again if the post still looks hot.",
+    };
+  }
+
+  const score = clampNumber(parsed.convictionScore || payload.analytics?.launchFitScore || payload.score || 50, 1, 100);
+  return {
+    launchDecision: normalizeDecision(parsed.launchDecision, score),
+    convictionScore: score,
+    memeabilityScore: clampNumber(parsed.memeabilityScore || payload.analytics?.memeability || score, 1, 100),
+    socialEnergyScore: clampNumber(parsed.socialEnergyScore || payload.analytics?.socialEnergy || score, 1, 100),
+    timingScore: clampNumber(parsed.timingScore || payload.analytics?.timeliness || score, 1, 100),
+    distributionScore: clampNumber(parsed.distributionScore || score, 1, 100),
+    originalityScore: clampNumber(parsed.originalityScore || payload.analytics?.originality || score, 1, 100),
+    launchWindow: cleanShortText(parsed.launchWindow, score >= 75 ? "now" : "wait for more engagement"),
+    verdict: cleanShortText(parsed.verdict || parsed.memeThesis, "VEKTOR could not produce a clean verdict."),
+    whyItWorks: cleanShortText(parsed.whyItWorks || parsed.viralAngle, "The post has some captured social/meme signal."),
+    whyItMightFail: cleanShortText(parsed.whyItMightFail || firstRiskFlag(parsed.riskFlags), "The signal may not be strong enough yet."),
+    bestAngle: cleanShortText(parsed.bestAngle || parsed.memeThesis, "Only build a package if the post still feels live."),
+  };
+}
+
+function parseJsonObject(content) {
+  if (content && typeof content === "object") return content;
+  let text = String(content || "").replace(/<system-reminder>[\s\S]*$/i, "").trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (_error) {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end <= start) return null;
+    try {
+      return JSON.parse(text.slice(start, end + 1));
+    } catch (__error) {
+      return null;
+    }
+  }
+}
+
+function normalizeDecision(value, score) {
+  const text = String(value || "").toLowerCase();
+  if (score >= 75 && /launch|prime|now/.test(text)) return "launch_now";
+  if (score < 50 && /skip|weak|pass/.test(text)) return "skip";
+  if (/context|unclear|need/.test(text)) return "needs_context";
+  if (score >= 75) return "launch_now";
+  if (score < 40) return "skip";
+  return "watchlist";
+}
+
+function cleanShortText(value, fallback) {
+  const text = String(value || "")
+    .replace(/<system-reminder>[\s\S]*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return (text || fallback).slice(0, 360);
+}
+
+function firstRiskFlag(value) {
+  return Array.isArray(value) ? value[0] : "";
 }
 
 function buildFastVerdict(payload) {
@@ -1209,6 +1277,8 @@ async function getTokenInfo(contractAddress) {
     readTokenUint(contractAddress, "0x18160ddd"),
   ]);
   const market = await fetchMarketData(contractAddress);
+  const derivedMarketCap = deriveMarketCapFromSupply(totalSupply, decimals, market.priceUsd);
+  const marketCap = market.marketCap || derivedMarketCap;
 
   if (!name && !symbol && decimals === null && totalSupply === null) {
     throw new HttpError(400, "Contract exists, but ERC-20 metadata could not be read.");
@@ -1227,23 +1297,35 @@ async function getTokenInfo(contractAddress) {
     totalSupplyRaw: totalSupply,
     priceUsd: market.priceUsd,
     liquidityUsd: market.liquidityUsd,
-    marketCap: market.marketCap,
+    marketCap,
+    fdv: market.fdv,
     marketCapSource: market.source,
-    marketCapNote: market.note,
+    marketCapNote: market.marketCap ? market.note : derivedMarketCap ? `Market cap derived from on-chain total supply and ${market.source} price.` : market.note,
   };
+}
+
+function deriveMarketCapFromSupply(totalSupplyRaw, decimals, priceUsd) {
+  const price = Number(priceUsd || 0);
+  const decimalCount = Number(decimals);
+  if (!totalSupplyRaw || !Number.isFinite(decimalCount) || decimalCount < 0 || !price) return null;
+  const supply = Number(totalSupplyRaw) / 10 ** decimalCount;
+  if (!Number.isFinite(supply) || supply <= 0) return null;
+  const value = supply * price;
+  return Number.isFinite(value) && value > 0 ? String(value) : null;
 }
 
 async function fetchMarketData(contractAddress) {
   const dexScreener = await fetchDexScreenerMarket(contractAddress);
-  if (dexScreener.marketCap || dexScreener.priceUsd || dexScreener.liquidityUsd) return dexScreener;
+  if (dexScreener.marketCap || dexScreener.fdv || dexScreener.priceUsd || dexScreener.liquidityUsd) return dexScreener;
 
   const geckoTerminal = await fetchGeckoTerminalMarket(contractAddress);
-  if (geckoTerminal.marketCap || geckoTerminal.priceUsd || geckoTerminal.liquidityUsd) return geckoTerminal;
+  if (geckoTerminal.marketCap || geckoTerminal.fdv || geckoTerminal.priceUsd || geckoTerminal.liquidityUsd) return geckoTerminal;
 
   return {
     priceUsd: null,
     liquidityUsd: null,
     marketCap: null,
+    fdv: null,
     source: "not indexed",
     note: "No public market data found yet for this contract.",
   };
@@ -1262,9 +1344,10 @@ async function fetchDexScreenerMarket(contractAddress) {
     return {
       priceUsd: best.priceUsd || null,
       liquidityUsd: best.liquidity?.usd ? String(best.liquidity.usd) : null,
-      marketCap: best.marketCap || best.fdv || null,
+      marketCap: best.marketCap || null,
+      fdv: best.fdv || null,
       source: "DexScreener",
-      note: best.marketCap ? "Market cap from DexScreener." : best.fdv ? "FDV from DexScreener used when market cap is unavailable." : "Price/liquidity found; market cap unavailable.",
+      note: best.marketCap ? "Market cap from DexScreener." : best.fdv ? "FDV from DexScreener; market cap unavailable." : "Price/liquidity found; market cap unavailable.",
     };
   } catch (_error) {
     return emptyMarket("DexScreener lookup failed.");
@@ -1284,9 +1367,10 @@ async function fetchGeckoTerminalMarket(contractAddress) {
     return {
       priceUsd: best.attributes?.base_token_price_usd || null,
       liquidityUsd: best.attributes?.reserve_in_usd || null,
-      marketCap: best.attributes?.market_cap_usd || best.attributes?.fdv_usd || null,
+      marketCap: best.attributes?.market_cap_usd || null,
+      fdv: best.attributes?.fdv_usd || null,
       source: "GeckoTerminal",
-      note: best.attributes?.market_cap_usd ? "Market cap from GeckoTerminal." : best.attributes?.fdv_usd ? "FDV from GeckoTerminal used when market cap is unavailable." : "Price/liquidity found; market cap unavailable.",
+      note: best.attributes?.market_cap_usd ? "Market cap from GeckoTerminal." : best.attributes?.fdv_usd ? "FDV from GeckoTerminal; market cap unavailable." : "Price/liquidity found; market cap unavailable.",
     };
   } catch (_error) {
     return emptyMarket("GeckoTerminal lookup failed.");
@@ -1294,7 +1378,7 @@ async function fetchGeckoTerminalMarket(contractAddress) {
 }
 
 function emptyMarket(note) {
-  return { priceUsd: null, liquidityUsd: null, marketCap: null, source: "none", note };
+  return { priceUsd: null, liquidityUsd: null, marketCap: null, fdv: null, source: "none", note };
 }
 
 async function rpcCall(method, params) {
