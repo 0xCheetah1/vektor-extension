@@ -331,7 +331,7 @@ async function generatePlan(panel, payload) {
     renderAgentResult(output, result, payload.intent, payload.imageUrls, requestPayload);
   } catch (error) {
     const version = chrome.runtime.getManifest?.().version || "unknown";
-    output.textContent = `${error?.message || "Agent failed without returning an error."}\n\nVEKTOR version: ${version}`;
+    output.textContent = `${cleanErrorMessage(error?.message || "Agent failed without returning an error.")}\n\nVEKTOR version: ${version}`;
   } finally {
     button.disabled = false;
     button.textContent = payload.intent === "prepare_launch" ? "Prepare launch package" : "Ask VEKTOR";
@@ -342,7 +342,7 @@ async function generateTokenPlanWithFallback(payload) {
   try {
     return await sendRuntimeMessage({ type: "GENERATE_TOKEN_PLAN", payload });
   } catch (runtimeError) {
-    throw new Error(`VEKTOR background request failed: ${runtimeError?.message || "unknown"}`);
+    throw new Error(`VEKTOR background request failed: ${cleanErrorMessage(runtimeError?.message || "unknown")}`);
   }
 }
 
@@ -384,8 +384,16 @@ async function fetchWithTimeout(url, options, timeoutMs) {
 }
 
 function getEndpointTimeout(endpoint) {
-  if (/generate-token-plan/i.test(endpoint)) return /localhost|127\.0\.0\.1/i.test(endpoint) ? 2500 : 45_000;
+  if (/generate-token-plan/i.test(endpoint)) return /localhost|127\.0\.0\.1/i.test(endpoint) ? 2500 : 75_000;
   return /localhost|127\.0\.0\.1/i.test(endpoint) ? 2500 : 15000;
+}
+
+function cleanErrorMessage(message) {
+  return String(message || "")
+    .replace(/<system-reminder>[\s\S]*?(?:<\/system-reminder>|$)/gi, "")
+    .replace(/\n?http:\/\/localhost:8787\/api\/generate-token-plan: NetworkError when attempting to fetch resource\.?/gi, "")
+    .replace(/\s+$/g, "")
+    .trim() || "VEKTOR request failed.";
 }
 
 async function readProxyJson(response, endpoint) {
@@ -510,7 +518,7 @@ async function buildLaunchPackageFromVerdict(button, sourcePayload) {
     renderAgentResult(resultNode, result, "prepare_launch", sourcePayload.imageUrls, sourcePayload);
   } catch (error) {
     button.textContent = originalText;
-    const section = createResultSection("Package failed", error?.message || "VEKTOR could not build the launch package.");
+    const section = createResultSection("Package failed", cleanErrorMessage(error?.message || "VEKTOR could not build the launch package."));
     resultNode?.appendChild(section);
   } finally {
     button.disabled = false;
