@@ -13,6 +13,8 @@ const DEEPSEEK_ENDPOINT = process.env.DEEPSEEK_ENDPOINT || "https://api.deepseek
 const CONFIGURED_DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "";
 const DEEPSEEK_MODEL = CONFIGURED_DEEPSEEK_MODEL && CONFIGURED_DEEPSEEK_MODEL !== "deepseek-chat" ? CONFIGURED_DEEPSEEK_MODEL : "deepseek-flash";
 const ORBIO_ENDPOINT = process.env.ORBIO_ENDPOINT || "";
+const ORBIO_MODEL = process.env.ORBIO_MODEL || "";
+const ORBIO_ASK_MODEL = process.env.ORBIO_ASK_MODEL || ORBIO_MODEL;
 const ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
 const ROBINHOOD_EXPLORER_URL = "https://robin.etherscan.io";
 const BASEDBID_SDK_API_URL = process.env.BASEDBID_SDK_API_URL || "https://static.based.bid/api";
@@ -200,7 +202,6 @@ server.listen(PORT, HOST, () => {
 });
 
 async function generateTokenPlan(payload) {
-  if (payload?.intent === "analyze_only") return JSON.stringify(buildFastVerdict(payload));
   if (PROVIDER !== "orbio") return callDeepSeek(payload);
   try {
     return await callOrbio(payload);
@@ -273,7 +274,7 @@ async function callOrbio(payload) {
     ? [{ type: "text", text: prompt }, ...imageParts.filter(Boolean)]
     : prompt;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), intent === "analyze_only" ? 8_000 : 55_000);
+  const timeout = setTimeout(() => controller.abort(), intent === "analyze_only" ? 25_000 : 55_000);
 
   let response;
   try {
@@ -285,17 +286,16 @@ async function callOrbio(payload) {
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({
-        model: process.env.ORBIO_MODEL || undefined,
+        model: (intent === "analyze_only" ? ORBIO_ASK_MODEL : ORBIO_MODEL) || undefined,
         messages: [
           { role: "system", content: LAUNCH_SYSTEM_PROMPT },
           { role: "user", content: userContent },
         ],
         temperature: 0.25,
-        max_tokens: intent === "analyze_only" ? 350 : 1600,
+        max_tokens: intent === "analyze_only" ? 900 : 1600,
       }),
     });
   } catch (error) {
-    if (intent === "analyze_only" && error?.name === "AbortError") return JSON.stringify(buildFastVerdict(payload));
     throw error;
   } finally {
     clearTimeout(timeout);
