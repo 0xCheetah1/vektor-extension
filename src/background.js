@@ -125,7 +125,7 @@ async function prepareBasedBidBuy(payload) {
       ...payload,
       account: payload?.account || settings.walletAddress || "",
     },
-    "No based.bid preview service is reachable.",
+    "No supported Robinhood Chain buy route service is reachable.",
     { stringifyResult: false },
   );
 }

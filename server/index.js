@@ -427,7 +427,7 @@ async function prepareBasedBidBuy(payload) {
   const referrer = String(payload.referrer || ZERO_ADDRESS).trim() || ZERO_ADDRESS;
 
   if (!/^0x[a-fA-F0-9]{40}$/.test(contractAddress)) throw new HttpError(400, "Invalid token contract address.");
-  if (!/^0x[a-fA-F0-9]{40}$/.test(account)) throw new HttpError(400, "Connect an EVM wallet before preparing a based.bid buy.");
+  if (!/^0x[a-fA-F0-9]{40}$/.test(account)) throw new HttpError(400, "Connect an EVM wallet before preparing a buy route.");
   if (!/^0x[a-fA-F0-9]{40}$/.test(referrer)) throw new HttpError(400, "Invalid referrer address.");
   if (![1, 5, 10].includes(slippage)) throw new HttpError(400, "Slippage must be 1, 5, or 10 percent.");
   if (!Number(amountEth) || Number(amountEth) <= 0) throw new HttpError(400, "Enter a valid ETH amount.");
@@ -451,9 +451,9 @@ async function prepareBasedBidBuy(payload) {
     throw error;
   }
 
-  if (preview.chain?.id && preview.chain.id !== 4663) throw new HttpError(502, "based.bid returned a non-Robinhood transaction.");
-  if (!preview.address || !preview.functionName || !Array.isArray(preview.args)) throw new HttpError(502, "based.bid returned an invalid buy preview.");
-  if (preview.functionName !== "buy") throw new HttpError(502, `Unsupported based.bid buy function: ${preview.functionName}`);
+  if (preview.chain?.id && preview.chain.id !== 4663) throw new HttpError(502, "Buy router returned a non-Robinhood transaction.");
+  if (!preview.address || !preview.functionName || !Array.isArray(preview.args)) throw new HttpError(502, "Buy router returned an invalid preview.");
+  if (preview.functionName !== "buy") throw new HttpError(502, `Unsupported buy router function: ${preview.functionName}`);
 
   const valueWei = BigInt(preview.value || parseEther(amountEth).toString());
   const data = encodeFunctionData({ abi: TRADE_FACET_ABI, functionName: preview.functionName, args: preview.args });
@@ -476,6 +476,7 @@ async function prepareBasedBidBuy(payload) {
       functionName: preview.functionName,
       valueWei: valueWei.toString(),
     },
+    tradeUrl: `${BASEDBID_PLATFORM_URL}/robin/token/${contractAddress}`,
     basedBidUrl: `${BASEDBID_PLATFORM_URL}/robin/token/${contractAddress}`,
   };
 }
@@ -494,7 +495,7 @@ async function prepareUniswapV2Buy(contractAddress, account, amountEth, slippage
 
   const pair = await rpcCall("eth_call", [{ to: UNISWAP_V2_FACTORY, data: encodePairCall(token) }, "latest"]).then(extractAddress);
   if (!pair || pair === ZERO_ADDRESS) {
-    throw new HttpError(400, "No Uniswap V2 pool for this token on Robinhood Chain. Buy it on based.bid instead.");
+    throw new HttpError(400, "No supported Robinhood Chain buy route found for this token yet.");
   }
 
   const amountsOut = await rpcCall("eth_call", [{

@@ -1069,7 +1069,7 @@ async function prepareBuy(panel, contractAddress, amount) {
   }
 
   setBuyDisabled(panel, true);
-  output.textContent = `Preparing based.bid buy preview for ${amount} ETH...`;
+  output.textContent = `Preparing Robinhood Chain buy route for ${amount} ETH...`;
 
   try {
     const chain = await getChainConfig();
@@ -1090,7 +1090,7 @@ async function prepareBuy(panel, contractAddress, amount) {
         status: "submitted",
         transactionHash: sent.transactionHash,
         explorerUrl: `https://robin.etherscan.io/tx/${sent.transactionHash}`,
-        basedBidUrl: preview.basedBidUrl,
+        tradeUrl: preview.tradeUrl || preview.basedBidUrl,
       },
       null,
       2,
@@ -1103,17 +1103,24 @@ async function prepareBuy(panel, contractAddress, amount) {
 }
 
 function renderBuyError(output, contractAddress, error) {
-  const message = error?.message || "based.bid buy failed.";
+  const message = normalizeBuyError(error?.message || "Buy route failed.");
   output.replaceChildren();
   const text = document.createElement("span");
   text.textContent = message;
   output.appendChild(text);
 
-  if (/lbp|token not found|not a based\.bid|uniswap v2|no pool|dex instead/i.test(message)) {
-    const link = createExternalLink(`https://trade.based.bid/robinhood/${contractAddress}`, "Buy on based.bid");
+  if (/no supported buy route|couldn't find a supported/i.test(message)) {
+    const link = createExternalLink(`https://robin.etherscan.io/token/${contractAddress}`, "Open on Robinhood Etherscan");
     output.appendChild(document.createElement("br"));
     output.appendChild(link);
   }
+}
+
+function normalizeBuyError(message) {
+  if (/no uniswap v2 pool|token not found|not a based\.bid|basedbid|no pool|dex instead|buy it on based\.bid|no supported robinhood chain buy route/i.test(message)) {
+    return "VEKTOR couldn't find a supported Robinhood Chain buy route for this token yet.";
+  }
+  return String(message || "Buy route failed.").replace(/based\.bid/gi, "buy route");
 }
 
 function getChainConfig() {
@@ -1487,7 +1494,7 @@ function createBuySpeedDial(amounts) {
 function createBuyOutput(settings) {
   const output = createOutput();
   output.textContent = settings.walletAddress
-    ? "Pick a preset or enter a custom ETH amount. VEKTOR will prepare a based.bid preview, then ask your wallet to sign."
+    ? "Pick a preset or enter a custom ETH amount. VEKTOR will prepare a supported Robinhood Chain buy route, then ask your wallet to sign."
     : "Connect wallet from VEKTOR dashboard or when prompted. VEKTOR never asks for private keys.";
   return output;
 }
