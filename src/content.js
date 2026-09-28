@@ -156,9 +156,9 @@ function injectButtons() {
     button.type = "button";
     const analytics = analyzeLaunchFit(tweet, tweetText);
     if (analytics.launchFitScore < ASK_THRESHOLD) return;
-    const action = analytics.launchFitScore >= LAUNCH_THRESHOLD ? "launch" : "ask";
-    button.textContent = action === "launch" ? "Launch meme" : "Ask VEKTOR";
-    button.title = action === "launch" ? "Prepare a launch package from this post" : "Ask VEKTOR if this post is worth launching";
+    const action = "ask";
+    button.textContent = analytics.launchFitScore >= LAUNCH_THRESHOLD ? "Ask VEKTOR · hot" : "Ask VEKTOR";
+    button.title = "Ask VEKTOR if this post is worth launching before building a launch package";
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -328,12 +328,12 @@ async function generatePlan(panel, payload) {
   try {
     const requestPayload = { ...payload, extraInstructions: extra };
     const result = await generateTokenPlanWithFallback(requestPayload);
-    renderAgentResult(output, result, payload.intent, payload.imageUrls);
+    renderAgentResult(output, result, payload.intent, payload.imageUrls, requestPayload);
   } catch (error) {
     output.textContent = error?.message || "Agent failed without returning an error.";
   } finally {
     button.disabled = false;
-    button.textContent = "Generate launch plan";
+    button.textContent = payload.intent === "prepare_launch" ? "Prepare launch package" : "Ask VEKTOR";
   }
 }
 
@@ -363,7 +363,7 @@ async function postJsonToFirstAvailable(endpoints, payload) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await response.json();
+      const data = await readProxyJson(response, endpoint);
       if (!response.ok || !data?.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       return data.result;
     } catch (error) {
@@ -373,13 +373,28 @@ async function postJsonToFirstAvailable(endpoints, payload) {
   throw new Error(failures.join("\n") || "No VEKTOR proxy is reachable.");
 }
 
-function renderAgentResult(output, result, intent, imageUrls) {
+async function readProxyJson(response, endpoint) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (_error) {
+    const snippet = text.replace(/\s+/g, " ").trim().slice(0, 120) || "empty response";
+    throw new Error(`Non-JSON response from ${endpoint} (${response.status}): ${snippet}`);
+  }
+}
+
+function renderAgentResult(output, result, intent, imageUrls, sourcePayload = null) {
   const parsed = parseAgentResult(result);
   if (!parsed) {
     output.textContent = result;
     return;
   }
   parsed.imageUrls = Array.isArray(imageUrls) ? imageUrls : [];
+
+  if (intent === "analyze_only") {
+    renderAgentVerdict(output, parsed, sourcePayload);
+    return;
+  }
 
   const wrap = document.createElement("div");
   wrap.className = "vektor-result";
@@ -395,6 +410,118 @@ function renderAgentResult(output, result, intent, imageUrls) {
   );
   wrap.appendChild(createLaunchTokenButton(intent));
   output.replaceWith(wrap);
+}
+
+function renderAgentVerdict(output, parsed, sourcePayload) {
+  const decision = normalizeLaunchDecision(parsed.launchDecision, parsed.launchReadiness);
+  const wrap = document.createElement("div");
+  wrap.className = `vektor-result verdict ${decision}`;
+  wrap.append(
+    createVerdictHero(parsed, decision),
+    createVerdictScores(parsed),
+    createResultSection("Verdict", parsed.verdict || parsed.memeThesis || "VEKTOR needs more signal before calling this launchable."),
+    createResultSection("Why it works", parsed.whyItWorks || parsed.viralAngle),
+    createResultSection("Why it might fail", parsed.whyItMightFail || getUserRiskFlags(parsed.riskFlags).join(" ") || "No major meme-quality failure mode flagged."),
+    createResultSection("Best angle", parsed.bestAngle || parsed.memeThesis),
+    createResultSection("Share mechanic", parsed.shareMechanic || parsed.viralAngle),
+    createResultSection("Ideal buyer", parsed.idealBuyer || "People already engaging with this timeline moment."),
+    createResultSection("Next move", parsed.nextAction || getVerdictNextAction(decision)),
+  );
+  wrap.appendChild(createBuildPackageButton(decision, sourcePayload));
+  output.replaceWith(wrap);
+}
+
+function createVerdictHero(result, decision) {
+  const hero = document.createElement("div");
+  hero.className = "vektor-result-hero verdict";
+  const label = document.createElement("span");
+  label.textContent = "VEKTOR verdict";
+  const title = document.createElement("strong");
+  title.textContent = getDecisionLabel(decision);
+  const readiness = document.createElement("em");
+  const score = clampScore(result.convictionScore);
+  readiness.textContent = `${score}/100 conviction · ${result.launchWindow || result.launchReadiness || "fast read"}`;
+  hero.append(label, title, readiness);
+  return hero;
+}
+
+function createVerdictScores(result) {
+  const section = document.createElement("section");
+  section.className = "vektor-verdict-scores";
+  [
+    ["Meme", result.memeabilityScore],
+    ["Social", result.socialEnergyScore],
+    ["Timing", result.timingScore],
+    ["Distribution", result.distributionScore],
+    ["Originality", result.originalityScore],
+  ].forEach(([label, value]) => {
+    const item = document.createElement("span");
+    item.textContent = `${label} ${clampScore(value)}/100`;
+    section.appendChild(item);
+  });
+  return section;
+}
+
+function createBuildPackageButton(decision, sourcePayload) {
+  const button = document.createElement("button");
+  button.className = `vektor-launch-token-action build-package ${decision === "launch_now" ? "" : "secondary"}`;
+  button.type = "button";
+  button.textContent = getBuildPackageLabel(decision);
+  button.addEventListener("click", () => buildLaunchPackageFromVerdict(button, sourcePayload));
+  return button;
+}
+
+async function buildLaunchPackageFromVerdict(button, sourcePayload) {
+  if (!sourcePayload) return;
+  const resultNode = button.closest(".vektor-result");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Building launch package...";
+  try {
+    const result = await generateTokenPlanWithFallback({ ...sourcePayload, intent: "prepare_launch" });
+    renderAgentResult(resultNode, result, "prepare_launch", sourcePayload.imageUrls, sourcePayload);
+  } catch (error) {
+    button.textContent = originalText;
+    const section = createResultSection("Package failed", error?.message || "VEKTOR could not build the launch package.");
+    resultNode?.appendChild(section);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function normalizeLaunchDecision(value, readiness = "") {
+  const text = String(value || readiness || "").toLowerCase();
+  if (/launch[_ -]?now|prime|launchable/.test(text)) return "launch_now";
+  if (/skip|weak|pass|do not/.test(text)) return "skip";
+  if (/context|unclear|need/.test(text)) return "needs_context";
+  return "watchlist";
+}
+
+function getDecisionLabel(decision) {
+  if (decision === "launch_now") return "Launch now";
+  if (decision === "skip") return "Skip this one";
+  if (decision === "needs_context") return "Needs more context";
+  return "Watchlist";
+}
+
+function getBuildPackageLabel(decision) {
+  if (decision === "launch_now") return "Build launch package";
+  if (decision === "skip") return "Override and draft anyway";
+  if (decision === "needs_context") return "Draft with current context";
+  return "Draft anyway";
+}
+
+function getVerdictNextAction(decision) {
+  if (decision === "launch_now") return "Build the launch package, review it, then launch through Orbio if it still feels hot.";
+  if (decision === "skip") return "Skip this post unless you have extra context that changes the meme thesis.";
+  if (decision === "needs_context") return "Add the missing lore or timing context, then ask VEKTOR again.";
+  return "Watch engagement and only draft if the meme starts moving.";
+}
+
+function clampScore(value) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number)) return 1;
+  return Math.max(1, Math.min(100, Math.round(number)));
 }
 
 function createLaunchConfig(plan) {
@@ -1373,7 +1500,7 @@ function createTweetQuote(tweetText) {
 function createExtraInput() {
   const input = document.createElement("textarea");
   input.className = "vektor-extra";
-  input.placeholder = "Extra launch instructions. Example: make it degen, Base chain, funny ticker, no copyrighted names.";
+  input.placeholder = "Extra context for VEKTOR. Example: this is from today's Robinhood lore, ticker should feel culty.";
   return input;
 }
 
@@ -1388,7 +1515,7 @@ function createGenerateButton(action = "launch") {
 function createOutput() {
   const output = document.createElement("pre");
   output.className = "vektor-output";
-  output.textContent = "Agent will inspect the captured post text and produce token name, ticker, meme thesis, launch copy, image prompt, risk flags, and launch steps.";
+  output.textContent = "VEKTOR will judge memeability, social energy, timing, and whether this deserves a token before building a launch package.";
   return output;
 }
 

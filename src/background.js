@@ -204,7 +204,7 @@ async function postToFirstAvailable(endpoints, payload, fallbackMessage, options
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const data = await readProxyJson(response, endpoint);
       if (!response.ok) throw new Error(data?.error || `VEKTOR proxy failed with ${response.status}`);
       if (!options.stringifyResult) return data.result;
       return typeof data.result === "string" ? data.result : JSON.stringify(data.result, null, 2);
@@ -221,7 +221,7 @@ async function getFromFirstAvailable(endpoints, fallbackMessage) {
   for (const endpoint of endpoints) {
     try {
       const response = await fetch(endpoint);
-      const data = await response.json();
+      const data = await readProxyJson(response, endpoint);
       if (!response.ok || !data?.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       return data.result;
     } catch (error) {
@@ -229,4 +229,14 @@ async function getFromFirstAvailable(endpoints, fallbackMessage) {
     }
   }
   throw new Error(failures.length ? failures.join("\n") : fallbackMessage);
+}
+
+async function readProxyJson(response, endpoint) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (_error) {
+    const snippet = text.replace(/\s+/g, " ").trim().slice(0, 120) || "empty response";
+    throw new Error(`Non-JSON response from ${endpoint} (${response.status}): ${snippet}`);
+  }
 }

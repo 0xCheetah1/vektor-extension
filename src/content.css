@@ -314,6 +314,30 @@
   margin-top: 8px;
 }
 
+.vektor-result.verdict.launch_now .vektor-result-hero {
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.vektor-result.verdict.skip .vektor-result-hero {
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.vektor-verdict-scores {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.vektor-verdict-scores span {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: rgb(209, 213, 219);
+  font-size: 11px;
+  font-weight: 850;
+  padding: 8px 10px;
+}
+
 .vektor-result-section {
   background: rgba(255, 255, 255, 0.055);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -361,6 +385,12 @@
 .vektor-launch-token-action:disabled {
   cursor: wait;
   opacity: 0.75;
+}
+
+.vektor-launch-token-action.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgb(229, 231, 235);
 }
 
 .vektor-result-section a {
