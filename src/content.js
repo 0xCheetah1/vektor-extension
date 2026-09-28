@@ -330,7 +330,8 @@ async function generatePlan(panel, payload) {
     const result = await generateTokenPlanWithFallback(requestPayload);
     renderAgentResult(output, result, payload.intent, payload.imageUrls, requestPayload);
   } catch (error) {
-    output.textContent = error?.message || "Agent failed without returning an error.";
+    const version = chrome.runtime.getManifest?.().version || "unknown";
+    output.textContent = `${error?.message || "Agent failed without returning an error."}\n\nVEKTOR version: ${version}`;
   } finally {
     button.disabled = false;
     button.textContent = payload.intent === "prepare_launch" ? "Prepare launch package" : "Ask VEKTOR";
@@ -341,11 +342,7 @@ async function generateTokenPlanWithFallback(payload) {
   try {
     return await sendRuntimeMessage({ type: "GENERATE_TOKEN_PLAN", payload });
   } catch (runtimeError) {
-    try {
-      return await postTextToFirstAvailable(AGENT_PROXY_ENDPOINTS, payload);
-    } catch (proxyError) {
-      throw new Error(`Extension route failed: ${runtimeError?.message || "unknown"}\nProxy route failed: ${proxyError?.message || "unknown"}`);
-    }
+    throw new Error(`VEKTOR background request failed: ${runtimeError?.message || "unknown"}`);
   }
 }
 
