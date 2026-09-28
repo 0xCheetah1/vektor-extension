@@ -291,8 +291,9 @@ async function callOrbio(payload) {
           { role: "system", content: LAUNCH_SYSTEM_PROMPT },
           { role: "user", content: userContent },
         ],
+        response_format: { type: "json_object" },
         temperature: 0.25,
-        max_tokens: intent === "analyze_only" ? 900 : 1600,
+        max_tokens: intent === "analyze_only" ? 900 : 2600,
       }),
     });
   } catch (error) {
@@ -308,7 +309,7 @@ async function callOrbio(payload) {
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content || data?.output || data?.text || data?.response;
   if (intent === "analyze_only") return JSON.stringify(normalizeAskVerdict(content, payload));
-  return typeof content === "string" ? content : JSON.stringify(data, null, 2);
+  return JSON.stringify(normalizeLaunchPackage(content, payload));
 }
 
 function normalizeAskVerdict(content, payload) {
@@ -336,6 +337,66 @@ function normalizeAskVerdict(content, payload) {
     whyItMightFail: cleanShortText(parsed.whyItMightFail || firstRiskFlag(parsed.riskFlags), "The signal may not be strong enough yet."),
     bestAngle: cleanShortText(parsed.bestAngle || parsed.memeThesis, "Only build a package if the post still feels live."),
   };
+}
+
+function normalizeLaunchPackage(content, payload) {
+  const parsed = parseJsonObject(content);
+  if (!parsed) {
+    throw new HttpError(502, "VEKTOR model returned malformed launch-package JSON. Ask again or add a little more context.");
+  }
+
+  const tokenName = cleanTokenPackageText(parsed.tokenName, "").slice(0, 40);
+  const ticker = cleanTicker(parsed.ticker || "");
+  const memeThesis = cleanTokenPackageText(parsed.memeThesis, "");
+  const viralAngle = cleanTokenPackageText(parsed.viralAngle, "");
+  const launchCopy = cleanTokenPackageText(parsed.launchCopy, "").slice(0, 280);
+  const imagePrompt = cleanTokenPackageText(parsed.imagePrompt, "");
+
+  const missing = [];
+  if (!tokenName) missing.push("tokenName");
+  if (!ticker) missing.push("ticker");
+  if (!memeThesis) missing.push("memeThesis");
+  if (!viralAngle) missing.push("viralAngle");
+  if (!launchCopy) missing.push("launchCopy");
+  if (!imagePrompt) missing.push("imagePrompt");
+  if (missing.length) {
+    throw new HttpError(502, `VEKTOR model returned an incomplete launch package: missing ${missing.join(", ")}. Ask again or add more context.`);
+  }
+
+  return {
+    launchDecision: normalizeDecision(parsed.launchDecision, parsed.convictionScore || payload.analytics?.launchFitScore || payload.score || 70),
+    convictionScore: clampNumber(parsed.convictionScore || payload.analytics?.launchFitScore || payload.score || 70, 1, 100),
+    tokenName,
+    ticker,
+    launchReadiness: cleanTokenPackageText(parsed.launchReadiness, "Launchable with review"),
+    memeThesis,
+    viralAngle,
+    launchCopy,
+    imagePrompt,
+    riskFlags: normalizeRiskFlags(parsed.riskFlags),
+    nextAction: cleanTokenPackageText(parsed.nextAction, "Review the package, then launch it through Orbio on Robinhood Chain."),
+    description: cleanTokenPackageText(parsed.description || memeThesis, memeThesis),
+  };
+}
+
+function cleanTicker(value) {
+  return String(value || "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toUpperCase()
+    .slice(0, 10);
+}
+
+function cleanTokenPackageText(value, fallback) {
+  const text = String(value || "")
+    .replace(/<system-reminder>[\s\S]*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text || fallback;
+}
+
+function normalizeRiskFlags(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => cleanTokenPackageText(item, "")).filter(Boolean).slice(0, 6);
 }
 
 function parseJsonObject(content) {
