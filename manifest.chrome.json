@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "VEKTOR Meme Launcher",
   "description": "Spot viral X posts, generate meme token metadata, and prepare token launches from an overlay.",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "minimum_chrome_version": "116",
   "icons": {
     "16": "src/icons/icon-16.png",

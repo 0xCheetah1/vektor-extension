@@ -245,6 +245,7 @@ async function fetchWithTimeout(url, options, timeoutMs) {
 }
 
 function getEndpointTimeout(endpoint) {
+  if (/generate-token-plan/i.test(endpoint)) return /localhost|127\.0\.0\.1/i.test(endpoint) ? 2500 : 45_000;
   return /localhost|127\.0\.0\.1/i.test(endpoint) ? 2500 : 15000;
 }
 
