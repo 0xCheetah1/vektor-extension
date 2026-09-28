@@ -423,11 +423,8 @@ function renderAgentVerdict(output, parsed, sourcePayload) {
     createResultSection("Why it works", parsed.whyItWorks || parsed.viralAngle),
     createResultSection("Why it might fail", parsed.whyItMightFail || getUserRiskFlags(parsed.riskFlags).join(" ") || "No major meme-quality failure mode flagged."),
     createResultSection("Best angle", parsed.bestAngle || parsed.memeThesis),
-    createResultSection("Share mechanic", parsed.shareMechanic || parsed.viralAngle),
-    createResultSection("Ideal buyer", parsed.idealBuyer || "People already engaging with this timeline moment."),
-    createResultSection("Next move", parsed.nextAction || getVerdictNextAction(decision)),
   );
-  wrap.appendChild(createBuildPackageButton(decision, sourcePayload));
+  wrap.appendChild(createVerdictActions(decision, sourcePayload));
   output.replaceWith(wrap);
 }
 
@@ -462,12 +459,28 @@ function createVerdictScores(result) {
   return section;
 }
 
+function createVerdictActions(decision, sourcePayload) {
+  const actions = document.createElement("div");
+  actions.className = "vektor-verdict-actions";
+  actions.append(createBuildPackageButton(decision, sourcePayload), createCancelVerdictButton());
+  return actions;
+}
+
 function createBuildPackageButton(decision, sourcePayload) {
   const button = document.createElement("button");
-  button.className = `vektor-launch-token-action build-package ${decision === "launch_now" ? "" : "secondary"}`;
+  button.className = "vektor-build-package-action";
   button.type = "button";
   button.textContent = getBuildPackageLabel(decision);
   button.addEventListener("click", () => buildLaunchPackageFromVerdict(button, sourcePayload));
+  return button;
+}
+
+function createCancelVerdictButton() {
+  const button = document.createElement("button");
+  button.className = "vektor-cancel-verdict-action";
+  button.type = "button";
+  button.textContent = "Cancel";
+  button.addEventListener("click", closePanel);
   return button;
 }
 
@@ -506,9 +519,9 @@ function getDecisionLabel(decision) {
 
 function getBuildPackageLabel(decision) {
   if (decision === "launch_now") return "Build launch package";
-  if (decision === "skip") return "Override and draft anyway";
-  if (decision === "needs_context") return "Draft with current context";
-  return "Draft anyway";
+  if (decision === "skip") return "Override and build package";
+  if (decision === "needs_context") return "Build with current context";
+  return "Build draft package";
 }
 
 function getVerdictNextAction(decision) {

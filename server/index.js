@@ -345,60 +345,19 @@ function normalizeImageContentType(contentType) {
   return "";
 }
 
-async function buildAgentPrompt(payload) {
+function buildAgentPrompt(payload) {
   const intent = payload.intent === "analyze_only" ? "analyze_only" : "prepare_launch";
-  const tweetUrlContext = await fetchTweetUrlContext(payload.tweetUrl || "");
   return `Analyze this captured X/Twitter context as VEKTOR.
 
 Intent: ${intent === "analyze_only" ? "judge whether this post is worth launching as a memecoin; verdict first; do not assume launch should happen" : "prepare a concrete launch package for a launchable post"}
 Tweet author: ${payload.author || "unknown"}
 Tweet text: ${payload.tweetText}
 Tweet URL: ${payload.tweetUrl || "unknown"}
-Fast URL context: ${tweetUrlContext || "not available within fast timeout; use captured context"}
 Attached image URLs: ${Array.isArray(payload.imageUrls) && payload.imageUrls.length ? payload.imageUrls.join(", ") : "none captured"}
 Client radar analytics, for hinting only: ${JSON.stringify(payload.analytics || {}, null, 2)}
 Extra user instructions: ${payload.extraInstructions || "none"}
 Wallet connected: ${payload.walletAddress ? "yes" : "no"}
 Robinhood Chain explorer: ${ROBINHOOD_EXPLORER_URL}`;
-}
-
-async function fetchTweetUrlContext(tweetUrl) {
-  if (!/^https?:\/\/(x|twitter)\.com\//i.test(tweetUrl)) return "";
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1800);
-  try {
-    const url = `https://publish.twitter.com/oembed?omit_script=1&url=${encodeURIComponent(tweetUrl)}`;
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 VEKTOR/0.1 tweet-context",
-      },
-    });
-    if (!response.ok) return "";
-    const data = await response.json();
-    const htmlText = stripHtml(data?.html || "");
-    const parts = [data?.author_name && `author=${data.author_name}`, htmlText && `embed=${htmlText}`].filter(Boolean);
-    return parts.join("; ").slice(0, 1200);
-  } catch (_error) {
-    return "";
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function stripHtml(value) {
-  return String(value || "")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 async function prepareBasedBidBuy(payload) {

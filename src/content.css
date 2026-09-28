@@ -338,6 +338,52 @@
   padding: 8px 10px;
 }
 
+.vektor-verdict-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr auto;
+}
+
+.vektor-build-package-action {
+  background: linear-gradient(135deg, rgb(251, 191, 36), rgb(16, 185, 129));
+  border: 0;
+  border-radius: 18px;
+  box-shadow: 0 12px 28px rgba(16, 185, 129, 0.22);
+  color: rgb(3, 7, 18);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 950;
+  padding: 14px;
+}
+
+.vektor-build-package-action:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.vektor-build-package-action:disabled {
+  cursor: wait;
+  opacity: 0.75;
+  transform: none;
+}
+
+.vektor-cancel-verdict-action {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  color: rgb(209, 213, 219);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+  padding: 0 16px;
+}
+
+.vektor-cancel-verdict-action:hover {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.3);
+  color: rgb(254, 202, 202);
+}
+
 .vektor-result-section {
   background: rgba(255, 255, 255, 0.055);
   border: 1px solid rgba(255, 255, 255, 0.08);
