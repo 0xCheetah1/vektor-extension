@@ -261,31 +261,44 @@ async function callOrbio(payload) {
   const apiKey = process.env.ORBIO_API_KEY || "";
   const endpoint = orbioChatEndpoint();
   if (!endpoint) throw new HttpError(503, "ORBIO_ENDPOINT or ORBIO_BASE_URL is not configured on the server.");
+  const intent = payload.intent === "analyze_only" ? "analyze_only" : "prepare_launch";
 
-  const imageUrls = Array.isArray(payload.imageUrls)
+  const imageUrls = intent !== "analyze_only" && Array.isArray(payload.imageUrls)
     ? payload.imageUrls.filter((url) => /^https?:\/\//i.test(url)).slice(0, 4)
     : [];
   const imageParts = imageUrls.length ? await Promise.all(imageUrls.map(fetchImagePart)) : [];
-  const prompt = await buildAgentPrompt(payload);
+  const prompt = buildAgentPrompt(payload);
   const userContent = imageParts.filter(Boolean).length
     ? [{ type: "text", text: prompt }, ...imageParts.filter(Boolean)]
     : prompt;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), intent === "analyze_only" ? 8_000 : 55_000);
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model: process.env.ORBIO_MODEL || undefined,
-      messages: [
-        { role: "system", content: LAUNCH_SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-      temperature: 0.4,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model: process.env.ORBIO_MODEL || undefined,
+        messages: [
+          { role: "system", content: LAUNCH_SYSTEM_PROMPT },
+          { role: "user", content: userContent },
+        ],
+        temperature: 0.25,
+        max_tokens: intent === "analyze_only" ? 350 : 1600,
+      }),
+    });
+  } catch (error) {
+    if (intent === "analyze_only" && error?.name === "AbortError") return JSON.stringify(buildFastVerdict(payload));
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const errorBody = await response.text();
@@ -296,8 +309,44 @@ async function callOrbio(payload) {
   return typeof content === "string" ? content : JSON.stringify(data, null, 2);
 }
 
+function buildFastVerdict(payload) {
+  const analytics = payload.analytics || {};
+  const score = clampNumber(analytics.launchFitScore || payload.score || 45, 1, 100);
+  const text = String(payload.tweetText || "").trim();
+  const hasHook = /\b(ai|crypto|eth|btc|meme|coin|viral|trenches|degen|pump|ticker|lore|cult|mascot|breaking|now|today)\b/i.test(text);
+  const decision = score >= 76 && hasHook ? "launch_now" : score >= 55 ? "watchlist" : text.length < 20 ? "needs_context" : "skip";
+  return {
+    launchDecision: decision,
+    convictionScore: score,
+    memeabilityScore: clampNumber(analytics.memeability || score, 1, 100),
+    socialEnergyScore: clampNumber(analytics.socialEnergy || Math.round(score * 0.8), 1, 100),
+    timingScore: clampNumber(analytics.timeliness || Math.round(score * 0.85), 1, 100),
+    distributionScore: clampNumber(Math.round(score * 0.8), 1, 100),
+    originalityScore: clampNumber(analytics.originality || Math.round(score * 0.75), 1, 100),
+    launchWindow: decision === "launch_now" ? "now" : decision === "watchlist" ? "wait for more engagement" : "needs more context",
+    verdict: getFastVerdictText(decision, score, hasHook),
+    whyItWorks: hasHook ? "There is at least a recognizable meme/market hook in the captured text." : "The captured text has limited meme surface.",
+    whyItMightFail: score < 70 ? "The captured signal is not strong enough yet." : "The hook may fade fast if replies and quotes do not keep moving.",
+    bestAngle: hasHook ? "Move only if the post still feels live and repeatable right now." : "Wait for a cleaner meme hook or add context before drafting.",
+  };
+}
+
+function getFastVerdictText(decision, score, hasHook) {
+  if (decision === "launch_now") return `Fast read: strong enough to draft now (${score}/100) because the post has timely meme signal.`;
+  if (decision === "watchlist") return `Fast read: watchlist (${score}/100). There is some signal, but not enough to call it an automatic launch.`;
+  if (decision === "needs_context") return "Fast read: needs more context before VEKTOR can judge it as launchable.";
+  return hasHook ? "Fast read: recognizable hook, but weak launch conviction from captured signal." : "Fast read: skip for now; the captured post does not have a clean meme hook.";
+}
+
+function clampNumber(value, min, max) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number)) return min;
+  return Math.max(min, Math.min(max, Math.round(number)));
+}
+
 async function buildDeepSeekUserContent(payload) {
   const prompt = buildAgentPrompt(payload);
+  if (payload.intent === "analyze_only") return prompt;
   const imageUrls = Array.isArray(payload.imageUrls)
     ? payload.imageUrls.filter((url) => /^https?:\/\//i.test(url)).slice(0, 4)
     : [];
@@ -347,6 +396,15 @@ function normalizeImageContentType(contentType) {
 
 function buildAgentPrompt(payload) {
   const intent = payload.intent === "analyze_only" ? "analyze_only" : "prepare_launch";
+  if (intent === "analyze_only") {
+    return `Fast VEKTOR launch judgment. Return compact analyze_only JSON only.
+Tweet author: ${payload.author || "unknown"}
+Tweet text: ${payload.tweetText}
+Tweet URL: ${payload.tweetUrl || "unknown"}
+Attached image URLs: ${Array.isArray(payload.imageUrls) && payload.imageUrls.length ? payload.imageUrls.slice(0, 2).join(", ") : "none captured"}
+Client radar: ${JSON.stringify(payload.analytics || {})}
+Extra context: ${payload.extraInstructions || "none"}`;
+  }
   return `Analyze this captured X/Twitter context as VEKTOR.
 
 Intent: ${intent === "analyze_only" ? "judge whether this post is worth launching as a memecoin; verdict first; do not assume launch should happen" : "prepare a concrete launch package for a launchable post"}
