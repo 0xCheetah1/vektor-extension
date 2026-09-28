@@ -358,11 +358,11 @@ async function postJsonToFirstAvailable(endpoints, payload) {
   const failures = [];
   for (const endpoint of endpoints) {
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetchWithTimeout(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
+      }, getEndpointTimeout(endpoint));
       const data = await readProxyJson(response, endpoint);
       if (!response.ok || !data?.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       return data.result;
@@ -371,6 +371,23 @@ async function postJsonToFirstAvailable(endpoints, payload) {
     }
   }
   throw new Error(failures.join("\n") || "No VEKTOR proxy is reachable.");
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`Timed out after ${Math.round(timeoutMs / 1000)}s`);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function getEndpointTimeout(endpoint) {
+  return /localhost|127\.0\.0\.1/i.test(endpoint) ? 2500 : 15000;
 }
 
 async function readProxyJson(response, endpoint) {
@@ -796,8 +813,8 @@ async function getJsonFromFirstAvailable(endpoints) {
   const failures = [];
   for (const endpoint of endpoints) {
     try {
-      const response = await fetch(endpoint);
-      const data = await response.json();
+      const response = await fetchWithTimeout(endpoint, {}, getEndpointTimeout(endpoint));
+      const data = await readProxyJson(response, endpoint);
       if (!response.ok || !data?.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       return data.result;
     } catch (error) {

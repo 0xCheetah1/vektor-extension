@@ -196,13 +196,13 @@ async function postToFirstAvailable(endpoints, payload, fallbackMessage, options
 
   for (const endpoint of endpoints) {
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetchWithTimeout(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
-      });
+      }, getEndpointTimeout(endpoint));
 
       const data = await readProxyJson(response, endpoint);
       if (!response.ok) throw new Error(data?.error || `VEKTOR proxy failed with ${response.status}`);
@@ -220,7 +220,7 @@ async function getFromFirstAvailable(endpoints, fallbackMessage) {
   const failures = [];
   for (const endpoint of endpoints) {
     try {
-      const response = await fetch(endpoint);
+      const response = await fetchWithTimeout(endpoint, {}, getEndpointTimeout(endpoint));
       const data = await readProxyJson(response, endpoint);
       if (!response.ok || !data?.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       return data.result;
@@ -229,6 +229,23 @@ async function getFromFirstAvailable(endpoints, fallbackMessage) {
     }
   }
   throw new Error(failures.length ? failures.join("\n") : fallbackMessage);
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`Timed out after ${Math.round(timeoutMs / 1000)}s`);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function getEndpointTimeout(endpoint) {
+  return /localhost|127\.0\.0\.1/i.test(endpoint) ? 2500 : 15000;
 }
 
 async function readProxyJson(response, endpoint) {
