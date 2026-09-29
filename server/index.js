@@ -612,7 +612,14 @@ async function prepareBasedBidBuy(payload) {
 
 const UNISWAP_V2_ROUTER = "0x89e5db8b5aa49aa85ac63f691524311aeb649eba";
 const UNISWAP_V2_FACTORY = "0x8bceaa40b9acdfaedf85adf4ff01f5ad6517937f";
+const PANCAKESWAP_V2_ROUTER = "0x8cFe327CEc66d1C090Dd72bd0FF11d690C33a2Eb";
+const PANCAKESWAP_V2_FACTORY = "0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E";
 const WETH_ROBINHOOD = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
+const ORBIO_ROBINHOOD = "0xaa07a0e9209e16ac99708c3ec70159c6ef3128a3";
+const ROBINHOOD_V2_BUY_ROUTES = [
+  { id: "uniswap-v2", label: "Uniswap V2", router: UNISWAP_V2_ROUTER, factory: UNISWAP_V2_FACTORY },
+  { id: "pancakeswap-v2", label: "PancakeSwap V2", router: PANCAKESWAP_V2_ROUTER, factory: PANCAKESWAP_V2_FACTORY },
+];
 const UNISWAP_V2_ROUTER_ABI = [
   { inputs: [{ internalType: "uint256", name: "amountIn", type: "uint256" }, { internalType: "address[]", name: "path", type: "address[]" }], name: "getAmountsOut", outputs: [{ internalType: "uint256[]", name: "amounts", type: "uint256[]" }], stateMutability: "view", type: "function" },
   { inputs: [{ internalType: "uint256", name: "amountOutMin", type: "uint256" }, { internalType: "address[]", name: "path", type: "address[]" }, { internalType: "address", name: "to", type: "address" }, { internalType: "uint256", name: "deadline", type: "uint256" }], name: "swapExactETHForTokensSupportingFeeOnTransferTokens", outputs: [], stateMutability: "payable", type: "function" },
@@ -621,42 +628,78 @@ const UNISWAP_V2_ROUTER_ABI = [
 async function prepareUniswapV2Buy(contractAddress, account, amountEth, slippage) {
   const amountWei = parseEther(amountEth);
   const token = contractAddress;
+  const failures = [];
 
-  const pair = await rpcCall("eth_call", [{ to: UNISWAP_V2_FACTORY, data: encodePairCall(token) }, "latest"]).then(extractAddress);
-  if (!pair || pair === ZERO_ADDRESS) {
-    throw new HttpError(400, "No supported Robinhood Chain buy route found for this token yet.");
+  for (const route of ROBINHOOD_V2_BUY_ROUTES) {
+    const paths = getBuyPaths(token);
+    for (const path of paths) {
+      try {
+        const pairs = await getPathPairs(route.factory, path);
+        if (pairs.some((pair) => !pair || pair === ZERO_ADDRESS)) {
+          failures.push(`${route.label} ${formatPath(path)}: no pair`);
+          continue;
+        }
+
+        const amountsOut = await rpcCall("eth_call", [{
+          to: route.router,
+          data: encodeFunctionData({ abi: UNISWAP_V2_ROUTER_ABI, functionName: "getAmountsOut", args: [amountWei, path] }),
+        }, "latest"]).then((result) => decodeFunctionResult({ abi: UNISWAP_V2_ROUTER_ABI, functionName: "getAmountsOut", data: result }));
+        const expectedOut = amountsOut[amountsOut.length - 1];
+        if (!expectedOut || expectedOut === 0n) {
+          failures.push(`${route.label} ${formatPath(path)}: pool returned no output`);
+          continue;
+        }
+        const amountOutMin = (expectedOut * BigInt(10000 - slippage * 100)) / 10000n;
+
+        const deadline = Math.floor(Date.now() / 1000) + 1200;
+        const data = encodeFunctionData({
+          abi: UNISWAP_V2_ROUTER_ABI,
+          functionName: "swapExactETHForTokensSupportingFeeOnTransferTokens",
+          args: [amountOutMin, path, account, deadline],
+        });
+
+        return {
+          chain: "Robinhood Chain",
+          chainId: 4663,
+          contractAddress,
+          amountEth,
+          slippage,
+          route: route.id,
+          routeLabel: route.label,
+          path,
+          transaction: { from: account, to: route.router, value: toHex(amountWei), data, chainId: "0x1237" },
+          preview: { to: route.router, functionName: "swapExactETHForTokens", valueWei: amountWei.toString(), expectedOut: expectedOut.toString(), pairs },
+        };
+      } catch (error) {
+        failures.push(`${route.label} ${formatPath(path)}: ${error?.message || "route failed"}`);
+      }
+    }
   }
 
-  const amountsOut = await rpcCall("eth_call", [{
-    to: UNISWAP_V2_ROUTER,
-    data: encodeFunctionData({ abi: UNISWAP_V2_ROUTER_ABI, functionName: "getAmountsOut", args: [amountWei, [WETH_ROBINHOOD, token]] }),
-  }, "latest"]).then((result) => decodeFunctionResult({ abi: UNISWAP_V2_ROUTER_ABI, functionName: "getAmountsOut", data: result }));
-  const expectedOut = amountsOut[amountsOut.length - 1];
-  if (!expectedOut || expectedOut === 0n) throw new HttpError(400, "Pool returned no output for this amount.");
-  const amountOutMin = (expectedOut * BigInt(10000 - slippage * 100)) / 10000n;
-
-  const deadline = Math.floor(Date.now() / 1000) + 1200;
-  const data = encodeFunctionData({
-    abi: UNISWAP_V2_ROUTER_ABI,
-    functionName: "swapExactETHForTokensSupportingFeeOnTransferTokens",
-    args: [amountOutMin, [WETH_ROBINHOOD, token], account, deadline],
-  });
-
-  return {
-    chain: "Robinhood Chain",
-    chainId: 4663,
-    contractAddress,
-    amountEth,
-    slippage,
-    route: "uniswap-v2",
-    transaction: { from: account, to: UNISWAP_V2_ROUTER, value: toHex(amountWei), data, chainId: "0x1237" },
-    preview: { to: UNISWAP_V2_ROUTER, functionName: "swapExactETHForTokens", valueWei: amountWei.toString(), expectedOut: expectedOut.toString(), pair },
-    basedBidUrl: `https://trade.based.bid/robinhood/${contractAddress}`,
-  };
+  throw new HttpError(400, `No supported Robinhood Chain buy route found for this token yet. Checked ${failures.join("; ")}.`);
 }
 
-function encodePairCall(token) {
-  return "0xe6a43905" + "000000000000000000000000" + WETH_ROBINHOOD.slice(2) + "000000000000000000000000" + token.slice(2);
+function getBuyPaths(token) {
+  const lowerToken = token.toLowerCase();
+  const paths = [[WETH_ROBINHOOD, token]];
+  if (lowerToken !== ORBIO_ROBINHOOD.toLowerCase()) paths.push([WETH_ROBINHOOD, ORBIO_ROBINHOOD, token]);
+  return paths;
+}
+
+async function getPathPairs(factory, path) {
+  const pairs = [];
+  for (let index = 0; index < path.length - 1; index++) {
+    pairs.push(await rpcCall("eth_call", [{ to: factory, data: encodePairCall(path[index], path[index + 1]) }, "latest"]).then(extractAddress));
+  }
+  return pairs;
+}
+
+function formatPath(path) {
+  return path.length === 3 ? "WETH->ORBIO->token" : "WETH->token";
+}
+
+function encodePairCall(tokenA, tokenB) {
+  return "0xe6a43905" + "000000000000000000000000" + tokenA.slice(2) + "000000000000000000000000" + tokenB.slice(2);
 }
 
 function extractAddress(result) {
