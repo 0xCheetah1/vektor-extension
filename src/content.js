@@ -60,10 +60,15 @@ const ROBINHOOD_CHAIN = {
 let scanScheduled = false;
 
 function init() {
+  clearStaleVektorUi();
   setupWalletBridge();
   scanTweets();
   const observer = new MutationObserver(scheduleScan);
   observer.observe(document.body, { childList: true, subtree: true });
+}
+
+function clearStaleVektorUi() {
+  document.querySelectorAll(".vektor-launch-button, .vektor-buy-button, .vektor-panel").forEach((node) => node.remove());
 }
 
 function scheduleScan() {
