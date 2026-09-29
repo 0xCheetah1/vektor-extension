@@ -73,8 +73,6 @@ function clearStaleVektorUi() {
 }
 
 function setupDelegatedActions() {
-  if (document.documentElement.dataset.vektorDelegatedActions === "ready") return;
-  document.documentElement.dataset.vektorDelegatedActions = "ready";
   document.addEventListener("click", (event) => {
     const buyButton = event.target?.closest?.(".vektor-buy-button");
     if (!buyButton) return;
@@ -110,9 +108,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 function setupWalletBridge() {
-  if (document.documentElement.dataset.vektorWalletBridge === "ready") return;
-  document.documentElement.dataset.vektorWalletBridge = "ready";
-
   const script = document.createElement("script");
   script.src = chrome.runtime.getURL("src/page-wallet.js");
   script.onload = () => script.remove();
@@ -211,7 +206,6 @@ function injectButtons() {
 
 function injectBuyButtons() {
   document.querySelectorAll(SELECTORS.tweet).forEach((tweet) => {
-    if (!isLaunchablePost(tweet)) return;
     const contractAddress = findContractAddress(getTweetText(tweet));
     if (!contractAddress) return;
     injectBuyButton(tweet.querySelector('[role="group"]') || tweet, contractAddress, "post");
@@ -306,7 +300,7 @@ async function openBuyPanel(contractAddress, source) {
   const amounts = normalizeQuickBuyAmounts(settings.quickBuyAmounts);
   const panel = document.createElement("section");
   panel.className = "vektor-panel";
-  panel.append(createBuyHeader(source, contractAddress), createContractBlock(contractAddress), createTokenInfoBlock(), createBuySpeedDial(amounts), createBuyOutput(settings));
+  panel.append(createBuyHeader(source, contractAddress), createContractBlock(contractAddress), createTokenInfoBlock(), createExternalBuyLinks(contractAddress), createBuySpeedDial(amounts), createBuyOutput(settings));
 
   document.body.appendChild(panel);
   state.openPanel = panel;
@@ -1519,6 +1513,17 @@ function createContractBlock(contractAddress) {
   value.textContent = contractAddress;
   block.append(label, value);
   return block;
+}
+
+function createExternalBuyLinks(contractAddress) {
+  const links = document.createElement("div");
+  links.className = "vektor-token-links";
+  links.append(
+    createExternalLink(`https://www.orbio.so/launchpad/${contractAddress}`, "Open on Orbio"),
+    createExternalLink(`https://pancakeswap.finance/swap?chain=robinhood&outputCurrency=${contractAddress}`, "Open PancakeSwap"),
+    createExternalLink(`https://robin.etherscan.io/token/${contractAddress}`, "Explorer"),
+  );
+  return links;
 }
 
 function createTokenInfoBlock() {
