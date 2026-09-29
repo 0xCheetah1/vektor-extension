@@ -979,8 +979,10 @@ function createLaunchTokenBlock(token) {
 
   const links = document.createElement("div");
   links.className = "vektor-token-links";
-  if (token.orbioUrl) links.append(createExternalLink(token.orbioUrl, "Open on Orbio"));
-  links.append(createExternalLink(token.explorerUrl, "Robinhood Etherscan"));
+  const orbioUrl = token.orbioUrl || (token.address ? `https://www.orbio.so/launchpad/${token.address}` : "");
+  if (orbioUrl) links.append(createExternalLink(orbioUrl, "Open on Orbio"));
+  links.append(createExternalLink(token.explorerUrl || `https://robin.etherscan.io/token/${token.address}`, "Robinhood Etherscan"));
+  links.append(createCloseAction("Close"));
 
   block.append(heading, body, ca, links);
   return block;
@@ -993,6 +995,15 @@ function createExternalLink(href, text) {
   link.rel = "noreferrer";
   link.textContent = text;
   return link;
+}
+
+function createCloseAction(text) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "vektor-close-action";
+  button.textContent = text;
+  button.addEventListener("click", closePanel);
+  return button;
 }
 
 function getUserRiskFlags(riskFlags) {

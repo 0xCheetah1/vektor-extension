@@ -631,15 +631,23 @@
   margin-top: 10px;
 }
 
-.vektor-token-links a {
+.vektor-token-links a,
+.vektor-close-action {
   background: rgba(16, 185, 129, 0.14);
   border: 1px solid rgba(16, 185, 129, 0.3);
   border-radius: 999px;
   color: rgb(110, 231, 183);
+  cursor: pointer;
   font-size: 11px;
   font-weight: 900;
   padding: 8px 12px;
   text-decoration: none;
+}
+
+.vektor-close-action {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgb(229, 231, 235);
 }
 
 .vektor-launch-token-status {
