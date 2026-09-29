@@ -838,6 +838,15 @@ async function prepareOrbioLaunch(payload) {
 
   const data = encodeFunctionData({ abi: ORBIO_AGENT_LAUNCH_ABI, functionName: "launch", args: [params, agentWallet] });
   const valueWei = BigInt(terms.launchFeeWei);
+  const transaction = {
+    from: account,
+    to: terms.vault,
+    value: toHex(valueWei),
+    data,
+    chainId: "0x1237",
+  };
+  const gas = await estimateTransactionGas(transaction);
+  const fees = await estimateTransactionFees();
 
   return {
     chain: "Robinhood Chain",
@@ -847,18 +856,14 @@ async function prepareOrbioLaunch(payload) {
     ticker,
     logoUrl: logo,
     agentWallet,
-    transaction: {
-      from: account,
-      to: terms.vault,
-      value: toHex(valueWei),
-      data,
-      chainId: "0x1237",
-    },
+    transaction: { ...transaction, ...gas, ...fees },
     preview: {
       to: terms.vault,
       functionName: "launch",
       valueWei: valueWei.toString(),
       launchFeeEth: (Number(valueWei) / 1e18).toString(),
+      gasLimit: gas.gas || "",
+      maxFeePerGas: fees.maxFeePerGas || "",
       pairToken: terms.pairToken,
       feeBps: terms.feeBps,
       creatorTaxBps,
@@ -866,6 +871,37 @@ async function prepareOrbioLaunch(payload) {
       economics: terms.economics,
     },
   };
+}
+
+async function estimateTransactionGas(transaction) {
+  try {
+    const estimate = BigInt(await rpcCall("eth_estimateGas", [{ from: transaction.from, to: transaction.to, value: transaction.value, data: transaction.data }]));
+    return { gas: toHex((estimate * 120n) / 100n) };
+  } catch (_error) {
+    return {};
+  }
+}
+
+async function estimateTransactionFees() {
+  try {
+    const [gasPriceHex, priorityHex, block] = await Promise.all([
+      rpcCall("eth_gasPrice", []),
+      rpcCall("eth_maxPriorityFeePerGas", []).catch(() => "0x0"),
+      rpcCall("eth_getBlockByNumber", ["latest", false]).catch(() => null),
+    ]);
+    const gasPrice = BigInt(gasPriceHex || "0x0");
+    const priority = BigInt(priorityHex || "0x0");
+    const baseFee = BigInt(block?.baseFeePerGas || "0x0");
+    const maxFee = baseFee > 0n ? maxBigInt(gasPrice, baseFee * 2n + priority) : gasPrice;
+    if (maxFee <= 0n) return {};
+    return { maxFeePerGas: toHex(maxFee), maxPriorityFeePerGas: toHex(priority) };
+  } catch (_error) {
+    return {};
+  }
+}
+
+function maxBigInt(left, right) {
+  return left > right ? left : right;
 }
 
 async function getOrbioLaunchTerms() {
