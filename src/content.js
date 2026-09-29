@@ -271,7 +271,7 @@ async function openBuyPanel(contractAddress, source) {
   const amounts = normalizeQuickBuyAmounts(settings.quickBuyAmounts);
   const panel = document.createElement("section");
   panel.className = "vektor-panel";
-  panel.append(createBuyHeader(source), createContractBlock(contractAddress), createTokenInfoBlock(), createBuySpeedDial(amounts), createBuyOutput(settings));
+  panel.append(createBuyHeader(source, contractAddress), createContractBlock(contractAddress), createTokenInfoBlock(), createBuySpeedDial(amounts), createBuyOutput(settings));
 
   document.body.appendChild(panel);
   state.openPanel = panel;
@@ -1230,9 +1230,19 @@ function loadTokenInfo(panel, contractAddress) {
     }
 
     panel.dataset.tokenValid = "true";
+    updateBuyHeader(panel, token, contractAddress);
     setBuyDisabled(panel, false);
     block.replaceChildren(createTokenInfoRows(token));
   });
+}
+
+function updateBuyHeader(panel, token, contractAddress) {
+  const title = panel.querySelector(".vektor-buy-token-title");
+  if (!title) return;
+  const name = token?.name || "Unknown token";
+  const symbol = token?.symbol && token.symbol !== "UNKNOWN" ? ` ($${token.symbol})` : "";
+  title.textContent = `${name}${symbol}`;
+  title.title = contractAddress;
 }
 
 function setBuyDisabled(panel, disabled) {
@@ -1426,10 +1436,13 @@ function createHeader(action = "launch") {
   return header;
 }
 
-function createBuyHeader(source) {
+function createBuyHeader(source, contractAddress = "") {
   const header = createHeader();
   header.querySelector("p").textContent = source === "bio" ? "VEKTOR TOKEN DETECTOR" : "VEKTOR CA DETECTOR";
-  header.querySelector("h2").textContent = "Quick buy detected token";
+  const title = header.querySelector("h2");
+  title.classList.add("vektor-buy-token-title");
+  title.textContent = shortAddress(contractAddress) || "Detected token";
+  title.title = contractAddress;
   return header;
 }
 
