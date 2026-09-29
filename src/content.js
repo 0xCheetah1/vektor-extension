@@ -58,6 +58,7 @@ const ROBINHOOD_CHAIN = {
 };
 
 let scanScheduled = false;
+const wiredBuyButtons = new WeakSet();
 
 function init() {
   clearStaleVektorUi();
@@ -98,9 +99,9 @@ function wireExistingBuyButtons() {
   document.querySelectorAll(".vektor-buy-button").forEach((button) => {
     const contractAddress = button.dataset.ca || findContractAddress(button.title || "");
     if (!contractAddress) return;
-    button.onpointerdown = (event) => activateBuyButton(event, button);
-    button.onmousedown = (event) => activateBuyButton(event, button);
-    button.onclick = (event) => activateBuyButton(event, button);
+    if (wiredBuyButtons.has(button)) return;
+    wiredBuyButtons.add(button);
+    button.addEventListener("click", (event) => activateBuyButton(event, button));
   });
 }
 
@@ -254,6 +255,7 @@ function injectBuyButton(target, contractAddress, source) {
   button.type = "button";
   button.textContent = "Buy token";
   button.title = `Quick buy ${contractAddress}`;
+  button.addEventListener("click", (event) => activateBuyButton(event, button));
   target.appendChild(button);
 }
 
