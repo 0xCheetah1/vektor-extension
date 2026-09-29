@@ -1568,7 +1568,7 @@ function createExternalBuyLinks(contractAddress) {
   links.className = "vektor-token-links";
   links.append(
     createExternalLink(`https://www.orbio.so/launchpad/${contractAddress}`, "Open on Orbio"),
-    createExternalLink(`https://pancakeswap.finance/swap?chain=robinhood&outputCurrency=${contractAddress}`, "Open PancakeSwap"),
+    createExternalLink(`https://dexscreener.com/robinhood/${contractAddress}`, "Open Dexscreener chart"),
     createExternalLink(`https://robin.etherscan.io/token/${contractAddress}`, "Explorer"),
   );
   return links;
