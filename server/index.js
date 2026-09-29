@@ -315,11 +315,7 @@ async function callOrbio(payload) {
 function normalizeAskVerdict(content, payload) {
   const parsed = parseJsonObject(content);
   if (!parsed) {
-    return {
-      ...buildFastVerdict(payload),
-      verdict: "VEKTOR's fast model returned a malformed verdict, so this is a captured-signal fallback.",
-      whyItMightFail: "The agent response could not be safely parsed; ask again if the post still looks hot.",
-    };
+    throw new HttpError(502, "VEKTOR could not read the model response. Reload the X/Twitter tab, then ask again.");
   }
 
   const score = clampNumber(parsed.convictionScore || payload.analytics?.launchFitScore || payload.score || 50, 1, 100);

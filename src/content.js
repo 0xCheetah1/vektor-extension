@@ -17,6 +17,14 @@ const AGENT_PROXY_ENDPOINTS = [
   "http://thecheetah11.com/vektor-agent/api/generate-token-plan",
   "http://localhost:8787/api/generate-token-plan",
 ];
+const TOKEN_INFO_ENDPOINTS = [
+  "http://thecheetah11.com/vektor-agent/api/token-info",
+  "http://localhost:8787/api/token-info",
+];
+const BASEDBID_BUY_PREVIEW_ENDPOINTS = [
+  "http://thecheetah11.com/vektor-agent/api/basedbid/buy-preview",
+  "http://localhost:8787/api/basedbid/buy-preview",
+];
 const ORBIO_LAUNCH_PREPARE_ENDPOINTS = [
   "http://thecheetah11.com/vektor-agent/api/orbio/launch-prepare",
   "http://localhost:8787/api/orbio/launch-prepare",
@@ -1122,15 +1130,7 @@ async function prepareBuy(panel, contractAddress, amount) {
   try {
     const chain = await getChainConfig();
     const wallet = await requestWallet(chain);
-    const preview = await sendRuntimeMessage({
-      type: "PREPARE_BASEDBID_BUY",
-      payload: {
-        contractAddress,
-        amountEth: amount,
-        account: wallet.address,
-        slippage: 5,
-      },
-    });
+    const preview = await prepareBuyPreviewWithFallback({ contractAddress, amountEth: amount, account: wallet.address, slippage: 5 });
     output.textContent = "Preview ready. Confirm the Robinhood Chain transaction in your wallet.";
     const sent = await requestWalletTransaction(chain, preview.transaction);
     output.textContent = JSON.stringify(
@@ -1147,6 +1147,14 @@ async function prepareBuy(panel, contractAddress, amount) {
     renderBuyError(output, contractAddress, error);
   } finally {
     if (state.openPanel === panel && panel.dataset.tokenValid === "true") setBuyDisabled(panel, false);
+  }
+}
+
+async function prepareBuyPreviewWithFallback(payload) {
+  try {
+    return await sendRuntimeMessage({ type: "PREPARE_BASEDBID_BUY", payload });
+  } catch (_runtimeError) {
+    return postJsonToFirstAvailable(BASEDBID_BUY_PREVIEW_ENDPOINTS, payload);
   }
 }
 
@@ -1240,20 +1248,14 @@ async function updateLaunchRecord(txHash, patch) {
   await setStorage({ launchHistory: list });
 }
 
-function loadTokenInfo(panel, contractAddress) {
+async function loadTokenInfo(panel, contractAddress) {
   const block = panel.querySelector(".vektor-token-info");
   block.textContent = "Validating contract on Robinhood Chain...";
 
-  chrome.runtime.sendMessage({ type: "GET_TOKEN_INFO", contractAddress }, (response) => {
+  try {
+    const response = await getTokenInfoWithFallback(contractAddress);
     if (!state.openPanel || state.openPanel !== panel) return;
-    if (!response?.ok) {
-      panel.dataset.tokenValid = "false";
-      setBuyDisabled(panel, true);
-      block.textContent = response?.error || "Token validation failed.";
-      return;
-    }
-
-    let token = response.result;
+    let token = response;
     if (typeof token === "string") {
       try {
         token = JSON.parse(token);
@@ -1266,7 +1268,20 @@ function loadTokenInfo(panel, contractAddress) {
     updateBuyHeader(panel, token, contractAddress);
     setBuyDisabled(panel, false);
     block.replaceChildren(createTokenInfoRows(token));
-  });
+  } catch (error) {
+    if (!state.openPanel || state.openPanel !== panel) return;
+    panel.dataset.tokenValid = "false";
+    setBuyDisabled(panel, true);
+    block.textContent = cleanErrorMessage(error?.message || "Token validation failed.");
+  }
+}
+
+async function getTokenInfoWithFallback(contractAddress) {
+  try {
+    return await sendRuntimeMessage({ type: "GET_TOKEN_INFO", contractAddress });
+  } catch (_runtimeError) {
+    return postJsonToFirstAvailable(TOKEN_INFO_ENDPOINTS, { contractAddress });
+  }
 }
 
 function updateBuyHeader(panel, token, contractAddress) {
