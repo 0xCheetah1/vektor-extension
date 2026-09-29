@@ -1547,6 +1547,11 @@ function createBuyHeader(source, contractAddress = "") {
   return header;
 }
 
+function shortAddress(address) {
+  const value = String(address || "");
+  return value.length > 12 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
+}
+
 function createContractBlock(contractAddress) {
   const block = document.createElement("div");
   block.className = "vektor-contract";
