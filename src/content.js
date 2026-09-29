@@ -61,6 +61,7 @@ let scanScheduled = false;
 
 function init() {
   clearStaleVektorUi();
+  setupDelegatedActions();
   setupWalletBridge();
   scanTweets();
   const observer = new MutationObserver(scheduleScan);
@@ -69,6 +70,20 @@ function init() {
 
 function clearStaleVektorUi() {
   document.querySelectorAll(".vektor-launch-button, .vektor-buy-button, .vektor-panel").forEach((node) => node.remove());
+}
+
+function setupDelegatedActions() {
+  if (document.documentElement.dataset.vektorDelegatedActions === "ready") return;
+  document.documentElement.dataset.vektorDelegatedActions = "ready";
+  document.addEventListener("click", (event) => {
+    const buyButton = event.target?.closest?.(".vektor-buy-button");
+    if (!buyButton) return;
+    const contractAddress = buyButton.dataset.ca || findContractAddress(buyButton.title || "");
+    if (!contractAddress) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openBuyPanel(contractAddress, buyButton.dataset.source || "post");
+  }, true);
 }
 
 function scheduleScan() {
@@ -215,14 +230,10 @@ function injectBuyButton(target, contractAddress, source) {
   const button = document.createElement("button");
   button.className = "vektor-buy-button";
   button.dataset.ca = contractAddress.toLowerCase();
+  button.dataset.source = source;
   button.type = "button";
   button.textContent = "Buy token";
   button.title = `Quick buy ${contractAddress}`;
-  button.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    openBuyPanel(contractAddress, source);
-  });
   target.appendChild(button);
 }
 
