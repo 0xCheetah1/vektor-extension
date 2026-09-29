@@ -84,6 +84,18 @@ function setupDelegatedActions() {
   }, true);
 }
 
+function wireExistingBuyButtons() {
+  document.querySelectorAll(".vektor-buy-button").forEach((button) => {
+    const contractAddress = button.dataset.ca || findContractAddress(button.title || "");
+    if (!contractAddress) return;
+    button.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openBuyPanel(contractAddress, button.dataset.source || "post");
+    };
+  });
+}
+
 function scheduleScan() {
   if (scanScheduled) return;
   scanScheduled = true;
@@ -96,6 +108,7 @@ function scheduleScan() {
 function scanTweets() {
   injectButtons();
   injectBuyButtons();
+  wireExistingBuyButtons();
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -219,7 +232,12 @@ function injectBuyButtons() {
 }
 
 function injectBuyButton(target, contractAddress, source) {
-  if (target.querySelector(`.vektor-buy-button[data-ca="${contractAddress.toLowerCase()}"]`)) return;
+  const existing = target.querySelector(`.vektor-buy-button[data-ca="${contractAddress.toLowerCase()}"]`);
+  if (existing) {
+    existing.dataset.source = source;
+    wireExistingBuyButtons();
+    return;
+  }
 
   const button = document.createElement("button");
   button.className = "vektor-buy-button";
