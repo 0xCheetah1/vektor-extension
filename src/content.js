@@ -296,7 +296,7 @@ function openPanel(tweet, action) {
 
 async function openBuyPanel(contractAddress, source) {
   closePanel();
-  const settings = await getStorage(["quickBuyAmounts", "walletAddress", "walletChainId"]);
+  const settings = { quickBuyAmounts: ["0.01", "0.05", "0.1"], walletAddress: "", walletChainId: "" };
   const amounts = normalizeQuickBuyAmounts(settings.quickBuyAmounts);
   const panel = document.createElement("section");
   panel.className = "vektor-panel";
@@ -316,6 +316,21 @@ async function openBuyPanel(contractAddress, source) {
   });
   setupPanelDismiss(panel);
   loadTokenInfo(panel, contractAddress);
+
+  try {
+    const stored = await getStorage(["quickBuyAmounts", "walletAddress", "walletChainId"]);
+    if (state.openPanel !== panel) return;
+    const storedAmounts = normalizeQuickBuyAmounts(stored.quickBuyAmounts);
+    panel.querySelectorAll(".vektor-buy-option").forEach((button, index) => {
+      if (storedAmounts[index]) {
+        button.dataset.amount = storedAmounts[index];
+        button.textContent = `${storedAmounts[index]} ETH`;
+      }
+    });
+    panel.querySelector(".vektor-output").textContent = createBuyOutput(stored).textContent;
+  } catch (_error) {
+    // The panel remains usable with defaults if the extension context is stale.
+  }
 }
 
 function setupPanelDismiss(panel) {
