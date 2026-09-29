@@ -62,8 +62,12 @@ let scanScheduled = false;
 function init() {
   clearStaleVektorUi();
   setupDelegatedActions();
-  setupWalletBridge();
   scanTweets();
+  try {
+    setupWalletBridge();
+  } catch (_error) {
+    // Buying and panel UI must still work if wallet bridge setup is unavailable.
+  }
   const observer = new MutationObserver(scheduleScan);
   observer.observe(document.body, { childList: true, subtree: true });
 }
