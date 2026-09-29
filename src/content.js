@@ -80,23 +80,27 @@ function setupDelegatedActions() {
   document.addEventListener("click", (event) => {
     const buyButton = event.target?.closest?.(".vektor-buy-button");
     if (!buyButton) return;
-    const contractAddress = buyButton.dataset.ca || findContractAddress(buyButton.title || "");
-    if (!contractAddress) return;
-    event.preventDefault();
-    event.stopPropagation();
-    openBuyPanel(contractAddress, buyButton.dataset.source || "post");
+    activateBuyButton(event, buyButton);
   }, true);
+}
+
+function activateBuyButton(event, button) {
+  const contractAddress = button.dataset.ca || findContractAddress(button.title || "");
+  if (!contractAddress || button.dataset.vektorOpening === "true") return;
+  button.dataset.vektorOpening = "true";
+  setTimeout(() => delete button.dataset.vektorOpening, 750);
+  event.preventDefault();
+  event.stopPropagation();
+  openBuyPanel(contractAddress, button.dataset.source || "post");
 }
 
 function wireExistingBuyButtons() {
   document.querySelectorAll(".vektor-buy-button").forEach((button) => {
     const contractAddress = button.dataset.ca || findContractAddress(button.title || "");
     if (!contractAddress) return;
-    button.onclick = (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openBuyPanel(contractAddress, button.dataset.source || "post");
-    };
+    button.onpointerdown = (event) => activateBuyButton(event, button);
+    button.onmousedown = (event) => activateBuyButton(event, button);
+    button.onclick = (event) => activateBuyButton(event, button);
   });
 }
 

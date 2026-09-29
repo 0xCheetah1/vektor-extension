@@ -19,6 +19,9 @@
   margin-left: 8px;
   margin-top: 8px;
   padding: 7px 10px;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 10;
 }
 
 .vektor-buy-button:hover {
