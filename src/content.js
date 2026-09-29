@@ -331,16 +331,30 @@ async function generatePlan(panel, payload) {
   const button = panel.querySelector(".vektor-generate");
   const output = panel.querySelector(".vektor-output");
   const extra = panel.querySelector(".vektor-extra").value.trim();
+  const isAsk = payload.intent !== "prepare_launch";
+  let elapsed = 0;
 
   button.disabled = true;
-  button.textContent = payload.intent === "prepare_launch" ? "Preparing..." : "Asking...";
-  output.textContent = payload.intent === "prepare_launch" ? "Reading captured tweet and preparing a launch package..." : "Reading captured tweet and checking whether this is worth launching...";
+  button.textContent = isAsk ? "Asking..." : "Preparing...";
+  output.textContent = isAsk ? "Reading captured tweet and checking whether this is worth launching..." : "Reading captured tweet and preparing a launch package...";
+  const statusTimer = setInterval(() => {
+    elapsed += 5;
+    if (!state.openPanel || state.openPanel !== panel) {
+      clearInterval(statusTimer);
+      return;
+    }
+    output.textContent = isAsk
+      ? `Still asking VEKTOR... ${elapsed}s elapsed. Extra context can make this slower, but this should fail fast instead of hanging.`
+      : `Still preparing the launch package... ${elapsed}s elapsed.`;
+  }, 5000);
 
   try {
     const requestPayload = { ...payload, extraInstructions: extra };
     const result = await generateTokenPlanWithFallback(requestPayload);
+    clearInterval(statusTimer);
     renderAgentResult(output, result, payload.intent, payload.imageUrls, requestPayload);
   } catch (error) {
+    clearInterval(statusTimer);
     const version = chrome.runtime.getManifest?.().version || "unknown";
     output.textContent = `${cleanErrorMessage(error?.message || "Agent failed without returning an error.")}\n\nVEKTOR version: ${version}`;
   } finally {
@@ -362,11 +376,11 @@ async function generateTokenPlanWithFallback(payload) {
 }
 
 async function postTextToFirstAvailable(endpoints, payload) {
-  const result = await postJsonToFirstAvailable(endpoints, payload);
+  const result = await postJsonToFirstAvailable(endpoints, payload, payload?.intent === "analyze_only" ? 35_000 : undefined);
   return typeof result === "string" ? result : JSON.stringify(result, null, 2);
 }
 
-async function postJsonToFirstAvailable(endpoints, payload) {
+async function postJsonToFirstAvailable(endpoints, payload, timeoutMs = null) {
   const failures = [];
   for (const endpoint of endpoints) {
     try {
@@ -374,7 +388,7 @@ async function postJsonToFirstAvailable(endpoints, payload) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }, getEndpointTimeout(endpoint));
+      }, timeoutMs || getEndpointTimeout(endpoint));
       const data = await readProxyJson(response, endpoint);
       if (!response.ok || !data?.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       return data.result;

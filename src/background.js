@@ -187,7 +187,7 @@ async function callAgentProxy(settings, payload) {
       walletAddress: settings.walletAddress || "",
     },
     "No VEKTOR agent proxy is reachable.",
-    { stringifyResult: true },
+    { stringifyResult: true, timeoutMs: payload?.intent === "analyze_only" ? 35_000 : 65_000 },
   );
 }
 
@@ -202,7 +202,7 @@ async function postToFirstAvailable(endpoints, payload, fallbackMessage, options
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
-      }, getEndpointTimeout(endpoint));
+      }, options.timeoutMs || getEndpointTimeout(endpoint));
 
       const data = await readProxyJson(response, endpoint);
       if (!response.ok) throw new Error(data?.error || `VEKTOR proxy failed with ${response.status}`);
