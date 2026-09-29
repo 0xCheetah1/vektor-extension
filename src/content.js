@@ -37,6 +37,17 @@ const IMAGE_UPLOAD_ENDPOINTS = [
   "http://thecheetah11.com/vektor-agent/api/upload-image",
   "http://localhost:8787/api/upload-image",
 ];
+const ROBINHOOD_CHAIN = {
+  name: "Robinhood Chain",
+  chainId: "0x1237",
+  rpcUrls: ["https://rpc.mainnet.chain.robinhood.com"],
+  nativeCurrency: {
+    name: "Ether",
+    symbol: "ETH",
+    decimals: 18,
+  },
+  blockExplorerUrls: ["https://robin.etherscan.io"],
+};
 
 let scanScheduled = false;
 
@@ -342,7 +353,11 @@ async function generateTokenPlanWithFallback(payload) {
   try {
     return await sendRuntimeMessage({ type: "GENERATE_TOKEN_PLAN", payload });
   } catch (runtimeError) {
-    throw new Error(`VEKTOR background request failed: ${cleanErrorMessage(runtimeError?.message || "unknown")}`);
+    try {
+      return await postTextToFirstAvailable(AGENT_PROXY_ENDPOINTS, payload);
+    } catch (proxyError) {
+      throw new Error(cleanErrorMessage(proxyError?.message || runtimeError?.message || "VEKTOR request failed."));
+    }
   }
 }
 
@@ -1142,8 +1157,12 @@ function normalizeBuyError(message) {
   return String(message || "Buy route failed.").replace(/based\.bid/gi, "buy route");
 }
 
-function getChainConfig() {
-  return sendRuntimeMessage({ type: "GET_CHAIN_CONFIG" });
+async function getChainConfig() {
+  try {
+    return await sendRuntimeMessage({ type: "GET_CHAIN_CONFIG" });
+  } catch (_error) {
+    return ROBINHOOD_CHAIN;
+  }
 }
 
 function sendRuntimeMessage(message) {
