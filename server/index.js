@@ -1425,7 +1425,7 @@ async function getTokenInfo(contractAddress) {
     chain: "Robinhood Chain",
     chainId: 4663,
     isContract: true,
-    explorerUrl: `${ROBINHOOD_EXPLORER_URL}/address/${contractAddress}`,
+    explorerUrl: `${ROBINHOOD_EXPLORER_URL}/token/${contractAddress}`,
     name: name || "Unknown token",
     symbol: symbol || "UNKNOWN",
     decimals,

@@ -1592,7 +1592,7 @@ function createTokenInfoRows(token) {
     ["Liquidity", token.liquidityUsd ? `$${formatDisplayNumber(token.liquidityUsd)}` : "Not indexed"],
     ["Market cap", token.marketCap ? `$${formatDisplayNumber(token.marketCap)}` : token.marketCapNote || "Not indexed"],
     ["Source", token.marketCapSource || "none"],
-    ["Explorer", token.explorerUrl || "https://robin.etherscan.io"],
+    ["Explorer", token.address ? `https://robin.etherscan.io/token/${token.address}` : normalizeTokenExplorerUrl(token.explorerUrl)],
   ];
   if (token.fdv) rows.splice(6, 0, ["FDV", `$${formatDisplayNumber(token.fdv)}`]);
   rows.forEach(([label, value]) => {
@@ -1605,6 +1605,11 @@ function createTokenInfoRows(token) {
     wrap.appendChild(row);
   });
   return wrap;
+}
+
+function normalizeTokenExplorerUrl(url) {
+  const value = String(url || "");
+  return value.replace("/address/", "/token/") || "https://robin.etherscan.io";
 }
 
 function formatDisplayNumber(value) {
